@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import Hero from "./pages/landing-page/Hero";
 import { Flame } from "lucide-react";
-import { Button } from "@/components/ui/button";
-
 import How from "./pages/landing-page/How";
 import Features from "./pages/landing-page/Features";
 import Cta from "./pages/landing-page/Cta";
