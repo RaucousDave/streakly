@@ -1,14 +1,10 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db/db";
-import { Resend } from "resend";
-import { sendMail } from "../lib/mailer";
+
+
 import { magicLink } from "better-auth/plugins";
-import {
-  verificationEmail,
-  passwordResetEmail,
-  magicLinkEmail,
-} from "../lib/email-templates";
+
 import * as schema from "../db/schema";
 
 export const auth = betterAuth({
@@ -17,44 +13,39 @@ export const auth = betterAuth({
     schema,
   }),
 
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
+  //   enabled: true,
+  //   requireEmailVerification: true,
 
-    sendVerificationEmail: async ({
-      user,
-      url,
-    }: {
-      user: any;
-      url: string;
-    }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Verify your streakly email",
-        html: verificationEmail(url),
-      });
-    },
+  //   sendVerificationEmail: async ({
+  //     user,
+  //     url,
+  //   }: {
+  //     user: any;
+  //     url: string;
+  //   }) => {
+  //     await sendMail({
+  //       to: user.email,
+  //       subject: "Verify your streakly email",
+  //       html: verificationEmail(url),
+  //     });
+  //   },
 
-    sendResetPassword: async ({ user, url }: { user: any; url: string }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Reset your Streakly password",
-        html: passwordResetEmail(url),
-      });
-    },
+  //   sendResetPassword: async ({ user, url }: { user: any; url: string }) => {
+  //     await sendMail({
+  //       to: user.email,
+  //       subject: "Reset your Streakly password",
+  //       html: passwordResetEmail(url),
+  //     });
+  //   },
+  // },
+
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+    }
   },
 
-  plugins: [
-    magicLink({
-      sendMagicLink: async ({ email, url }: { email: string; url: string }) => {
-        await sendMail({
-          to: email,
-          subject: "Your streakly sign-in link",
-          html: magicLinkEmail(url),
-        });
-      },
-    }),
-  ],
 
   session: {
     expiresIn: 60 * 60 * 24 * 7,

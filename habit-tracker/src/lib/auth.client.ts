@@ -3,13 +3,18 @@ import { magicLinkClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000",
-  // baseURL: "http://localhost:5173",
   plugins: [magicLinkClient()],
 });
 
+
+export const googleSignIn = async () => {
+  const {error} = await authClient.signIn.social({provider: "google", callbackURL: `${import.meta.env.VITE_FRONTEND_URL}/dashboard`})
+
+  if(error){
+    console.log(error)
+  }
+}
 export const {
-  signIn,
-  signUp,
   signOut,
   useSession,
   requestPasswordReset,

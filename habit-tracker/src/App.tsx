@@ -154,15 +154,10 @@ export default function App() {
               className="hover:text-emerald-500 transition-colors"
             >
               Features
-            </a>
+          </a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              to="/sign-in"
-              className="text-zinc-100 transition-all ease-linear px-4 py-1 rounded-lg hover:bg-zinc-100 hover:text-zinc-900"
-            >
-              Log in
-            </Link>
+            
             <Link
               to="/sign-up"
               className="text-zinc-100 bg-emerald-500 transition-all ease-linear px-4 py-1 rounded-lg hover:bg-zinc-100 hover:text-zinc-900"
