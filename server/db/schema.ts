@@ -24,7 +24,7 @@ export const session = pgTable("session", {
   token: text("token").notNull().unique(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -35,7 +35,7 @@ export const account = pgTable("account", {
   providerId: text("provider_id").notNull(),
   userId: text("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, { onDelete: "cascade" }).notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -60,7 +60,7 @@ export const passkey = pgTable("passkey", {
   id: text("id").notNull(),
   name: text("name"),
   publicKey: text("public_key").notNull(),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
   credentialId: text("credential_id").notNull().unique(),
   counter: integer("counter").notNull().default(0),
   deviceType: text("device_type"),
@@ -70,9 +70,28 @@ export const passkey = pgTable("passkey", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const habits = pgTable("habits", {
+  id: text("id").notNull().primaryKey(),
+  name: text("name").notNull(),
+  userId: text("user_id").references(() => user.id, {onDelete: "cascade"}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  minimumInput: text("minimum_input").notNull(),
+  done: boolean("done").notNull().default(false),
+  color: text("color").notNull(),
+  freezes: integer("freezes").notNull().default(1),
+  maximumStreak: integer("maximum_streak").notNull().default(0),
+  currentStreak: integer("current_streak").notNull().default(0),
+  longestStreak: integer("longest_streak").notNull().default(0),
+  totalCompleted: integer("total_completed").notNull().default(0),
+  totalSkipped: integer("total_skipped").notNull().default(0),
+  totalFailed: integer("total_failed").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
 export type Session = typeof session.$inferSelect;
 export type Account = typeof account.$inferSelect;
+export type Habits = typeof habits.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
 export type Passkey = typeof passkey.$inferSelect;
