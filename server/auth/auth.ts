@@ -2,50 +2,28 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db/db";
 
-
-import { magicLink } from "better-auth/plugins";
-
 import * as schema from "../db/schema";
+import { anonymous } from "better-auth/plugins";
 
+console.log("CURRENT_NODE_ENV: ", process.env.NODE_ENV);
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
   }),
 
-  //   enabled: true,
-  //   requireEmailVerification: true,
-
-  //   sendVerificationEmail: async ({
-  //     user,
-  //     url,
-  //   }: {
-  //     user: any;
-  //     url: string;
-  //   }) => {
-  //     await sendMail({
-  //       to: user.email,
-  //       subject: "Verify your streakly email",
-  //       html: verificationEmail(url),
-  //     });
-  //   },
-
-  //   sendResetPassword: async ({ user, url }: { user: any; url: string }) => {
-  //     await sendMail({
-  //       to: user.email,
-  //       subject: "Reset your Streakly password",
-  //       html: passwordResetEmail(url),
-  //     });
-  //   },
-  // },
+  emailAndPassword: {
+    enabled: process.env.NODE_ENV === "development",
+    requireEmailVerification: false,
+  },
 
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-    }
+    },
   },
-
+  
 
   session: {
     expiresIn: 60 * 60 * 24 * 7,
