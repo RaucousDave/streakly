@@ -15,9 +15,6 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Strictness */
-    "strict": true,
-
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
