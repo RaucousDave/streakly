@@ -1,15 +1,11 @@
 import { useState, useEffect } from "react";
 import Hero from "./pages/landing-page/Hero";
 import { Flame } from "lucide-react";
-import { Button } from "@/components/ui/button";
-
 import How from "./pages/landing-page/How";
 import Features from "./pages/landing-page/Features";
 import Cta from "./pages/landing-page/Cta";
 import Footer from "./pages/landing-page/Footer";
-
-// ── Fake streak data for the animated preview ──────────────────────────────
-// ── Small reusable components ──────────────────────────────────────────────
+import { Link } from "@tanstack/react-router";
 
 export function SnowflakeIcon({ className = "" }) {
   return (
@@ -158,22 +154,16 @@ export default function App() {
               className="hover:text-emerald-500 transition-colors"
             >
               Features
-            </a>
+          </a>
           </nav>
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-zinc-100 hover:text-zinc-900"
-            >
-              Log in
-            </Button>
-            <Button
-              size="sm"
-              className="bg-emerald-500 hover:bg-emerald-700 text-white rounded-full px-5"
+            
+            <Link
+              to="/sign-up"
+              className="text-zinc-100 bg-emerald-500 transition-all ease-linear px-4 py-1 rounded-lg hover:bg-zinc-100 hover:text-zinc-900"
             >
               Get started free
-            </Button>
+            </Link>
           </div>
         </div>
       </header>
