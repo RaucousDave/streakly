@@ -7,8 +7,11 @@ import {
 import { auth } from "../auth/auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { db } from "../db/db";
+import { habitLogs } from "../db/schema";
 import { habits } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { isTemplateLiteralTypeNode } from "typescript";
+import { error } from "better-auth/api";
 
 const router = Router();
 
@@ -26,31 +29,58 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 export async function streakEngine() {
   const allHabits = await db.select().from(habits);
+  const today = new Date().toISOString().split("T")[0];
 
   for (const habit of allHabits) {
+    // checks if habit is checked as done by the user
     if (habit.done) {
       await db
         .update(habits)
         .set({
-          done: true,
           currentStreak: habit.currentStreak + 1,
+          longestStreak: Math.max(habit.longestStreak, habit.currentStreak + 1),
           totalCompleted: habit.totalCompleted + 1,
-          longestStreak:
-            Math.max(habit.longestStreak, habit.totalCompleted) + 1,
+          done: false,
           updatedAt: new Date(),
         })
         .where(eq(habits.id, habit.id));
-    } else if (habit.freezes > 0) {
+
+      // writes to habitLogs table
+      await db
+        .insert(habitLogs)
+        .values({
+          id: crypto.randomUUID(),
+          userId: habit.userId,
+          habitId: habit.id,
+          date: today as string,
+          status: "completed",
+        })
+        .returning();
+    }
+    // runs if habit was unchecked but freeze is active
+    else if (habit.freezes > 0) {
       await db
         .update(habits)
         .set({
-          done: true,
+          done: false,
           freezes: habit.freezes - 1,
           totalSkipped: habit.totalSkipped + 1,
           updatedAt: new Date(),
         })
         .where(eq(habits.id, habit.id));
+
+      await db
+        .insert(habitLogs)
+        .values({
+          id: crypto.randomUUID(),
+          userId: habit.userId,
+          habitId: habit.id,
+          date: today as string,
+          status: "skipped",
+        })
+        .returning();
     } else {
+      // Update habits
       await db
         .update(habits)
         .set({
@@ -60,6 +90,18 @@ export async function streakEngine() {
           updatedAt: new Date(),
         })
         .where(eq(habits.id, habit.id));
+
+      // Insert logs for habit if failed
+      await db
+        .insert(habitLogs)
+        .values({
+          id: crypto.randomUUID(),
+          userId: habit.userId,
+          habitId: habit.id,
+          date: today as string,
+          status: "failed",
+        })
+        .returning();
     }
   }
 }
@@ -138,7 +180,12 @@ router.patch(
 
       const [updatedHabit] = await db
         .update(habits)
-        .set({ done: !habits.done, updatedAt: new Date() });
+        .set({
+          done: !habit.done,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
+        .returning();
 
       return res.status(200).json({ message: updatedHabit });
     } catch (err) {
@@ -208,12 +255,52 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.get("/:id/logs", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const session = (req as any).session;
+    const id = req.params.id;
+    const months = Number(req.query.months ?? 3);
+
+    // check if id is valid
+    if (typeof id !== "string" || !id) {
+      res.status(400).json({ error: "Id is invalid" });
+      return;
+    }
+
+    const [habit] = await db
+      .select()
+      .from(habits)
+      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+    if (!habit) {
+      res.status(404).json({ error: "Habit not found" });
+    }
+
+    const since = new Date();
+    since.setMonth(since.getMonth() - months);
+    const sinceStr = since.toISOString().split("T")[0];
+
+    const logs = await db
+      .select()
+      .from(habitLogs)
+      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+
+    const filtered = logs.filter((log) => log.date >= sinceStr!);
+
+    res.json({ logs: filtered });
+  } catch (err) {
+    console.error("[GET /api/habits/:id/logs]", err);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
 router.post("/streak-engine", async (_req: Request, res: Response) => {
   try {
     await streakEngine();
-    res.json({ success: true, message: "Streak engine ran successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Streak engine ran successfully" });
   } catch (err) {
-    return res.json(400).json({ error: err });
+    return res.json(500).json({ error: err });
   }
 });
 

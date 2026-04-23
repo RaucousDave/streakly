@@ -6,19 +6,15 @@ export const authClient = createAuthClient({
   plugins: [magicLinkClient()],
 });
 
-
 export const googleSignIn = async () => {
-  const {error} = await authClient.signIn.social({provider: "google", callbackURL: `${import.meta.env.VITE_FRONTEND_URL}/dashboard`})
+  const { error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: `${import.meta.env.VITE_FRONTEND_URL}/dashboard`,
+  });
 
-  if(error){
-    console.log(error)
+  if (error) {
+    console.log(error);
   }
-}
-export const {
-  signOut,
-  useSession,
-  requestPasswordReset,
-  resetPassword,
-} = authClient;
-
-console.log(authClient);
+};
+export const { signOut, useSession, requestPasswordReset, resetPassword } =
+  authClient;

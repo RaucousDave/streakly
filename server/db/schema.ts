@@ -1,5 +1,3 @@
-import { password } from "bun";
-import { time } from "drizzle-orm/mysql-core";
 import {
   pgTable,
   text,
@@ -24,7 +22,9 @@ export const session = pgTable("session", {
   token: text("token").notNull().unique(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -35,7 +35,8 @@ export const account = pgTable("account", {
   providerId: text("provider_id").notNull(),
   userId: text("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }).notNull(),
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -60,7 +61,9 @@ export const passkey = pgTable("passkey", {
   id: text("id").notNull(),
   name: text("name"),
   publicKey: text("public_key").notNull(),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   credentialId: text("credential_id").notNull().unique(),
   counter: integer("counter").notNull().default(0),
   deviceType: text("device_type"),
@@ -73,7 +76,9 @@ export const passkey = pgTable("passkey", {
 export const habits = pgTable("habits", {
   id: text("id").notNull().primaryKey(),
   name: text("name").notNull(),
-  userId: text("user_id").references(() => user.id, {onDelete: "cascade"}).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
@@ -86,7 +91,20 @@ export const habits = pgTable("habits", {
   totalSkipped: integer("total_skipped").notNull().default(0),
   totalFailed: integer("total_failed").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+});
+
+export const habitLogs = pgTable("habit_logs", {
+  id: text("id").primaryKey().notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  habitId: text("habit_id")
+    .references(() => habits.id, { onDelete: "cascade" })
+    .notNull(),
+  date: text("date").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
@@ -95,3 +113,4 @@ export type Account = typeof account.$inferSelect;
 export type Habits = typeof habits.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
 export type Passkey = typeof passkey.$inferSelect;
+export type HabitLogs = typeof habitLogs.$inferSelect;

@@ -16,7 +16,7 @@ const app = express();
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173", // ← fix this too, missing localhost
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT","PATCH", "DELETE"],
     credentials: true,
   }),
 );
@@ -48,6 +48,9 @@ app.use(errorHandler);
 cron.schedule("0 0 * * *", async () => {
   await streakEngine();
 });
+
+
+
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
