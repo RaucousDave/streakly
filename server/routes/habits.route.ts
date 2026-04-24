@@ -276,7 +276,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
 });
 
 router.patch(
-  ":/id/restore",
+  "/:id/restore",
   requireAuth,
   async (req: Request, res: Response) => {
     const session = (req as any).session;
@@ -290,7 +290,12 @@ router.patch(
     const [restoredHabit] = await db
       .update(habits)
       .set({ deletedAt: null, updatedAt: new Date() })
-      .returning();
+      .where(and(isNotNull(habits.deletedAt), eq(habits.id, id)))
+      .returning({ id: habits.id, name: habits.name, color: habits.color });
+
+    return res
+      .status(200)
+      .json({ message: "Habit restored successfully", habit: restoredHabit });
   },
 );
 
