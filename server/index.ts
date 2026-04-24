@@ -8,7 +8,10 @@ import { globalAuthLimiter } from "./middleware/rate-limiter";
 
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 
-import habitRouter, { streakEngine } from "./routes/habits.route";
+import habitRouter, {
+  freezeResetEngine,
+  streakEngine,
+} from "./routes/habits.route";
 import cron from "node-cron";
 const app = express();
 
@@ -16,7 +19,7 @@ const app = express();
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173", // ← fix this too, missing localhost
-    methods: ["GET", "POST", "PUT","PATCH", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   }),
 );
@@ -49,8 +52,9 @@ cron.schedule("0 23 * * *", async () => {
   await streakEngine();
 });
 
-
-
+cron.schedule("0 0 * * 0", async () => {
+  await freezeResetEngine();
+});
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");

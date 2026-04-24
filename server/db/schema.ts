@@ -125,6 +125,7 @@ export const milestones = pgTable("milestones", {
   }),
   userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
   reachedAt: timestamp("reached_at").defaultNow().notNull(),
+  streakCount: integer("streak_count").notNull().default(0),
 });
 
 export type User = typeof user.$inferSelect;
