@@ -24,7 +24,9 @@ export const session = pgTable("session", {
   token: text("token").notNull().unique(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -35,7 +37,8 @@ export const account = pgTable("account", {
   providerId: text("provider_id").notNull(),
   userId: text("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }).notNull(),
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -60,7 +63,9 @@ export const passkey = pgTable("passkey", {
   id: text("id").notNull(),
   name: text("name"),
   publicKey: text("public_key").notNull(),
-  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   credentialId: text("credential_id").notNull().unique(),
   counter: integer("counter").notNull().default(0),
   deviceType: text("device_type"),
@@ -73,12 +78,17 @@ export const passkey = pgTable("passkey", {
 export const habits = pgTable("habits", {
   id: text("id").notNull().primaryKey(),
   name: text("name").notNull(),
-  userId: text("user_id").references(() => user.id, {onDelete: "cascade"}).notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
   freezes: integer("freezes").notNull().default(1),
+  freezesUsed: integer("freezes_used").default(0).notNull(),
+  freezeResetDate: timestamp("freeze_reset_date"),
+  lastProcessedDate: timestamp("last_processed_date"),
   maximumStreak: integer("maximum_streak").notNull().default(0),
   currentStreak: integer("current_streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
@@ -86,7 +96,33 @@ export const habits = pgTable("habits", {
   totalSkipped: integer("total_skipped").notNull().default(0),
   totalFailed: integer("total_failed").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const habitLogs = pgTable("habit_logs", {
+  id: text("id").primaryKey().notNull(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  habitId: text("habit_id")
+    .references(() => habits.id, { onDelete: "cascade" })
+    .notNull(),
+  date: text("date").notNull(),
+  status: text("status", {
+    enum: ["skipped", "completed", "failed"],
+  }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const milestones = pgTable("milestones", {
+  id: text("id").notNull().primaryKey(),
+  habitId: text("habit_id").references(() => habits.id, {
+    onDelete: "cascade",
+  }),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  reachedAt: timestamp("reached_at").defaultNow().notNull(),
+  streakCount: integer("streak_count").notNull().default(0),
+});
 
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;

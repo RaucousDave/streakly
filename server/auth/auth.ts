@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db/db";
 
 import * as schema from "../db/schema";
-import { anonymous } from "better-auth/plugins";
+
 
 console.log("CURRENT_NODE_ENV: ", process.env.NODE_ENV);
 export const auth = betterAuth({
