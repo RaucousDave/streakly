@@ -26,6 +26,7 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
 
 
+
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
       {/* Logo */}

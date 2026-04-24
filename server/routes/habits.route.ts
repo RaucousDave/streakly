@@ -9,9 +9,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { db } from "../db/db";
 import { habitLogs } from "../db/schema";
 import { habits } from "../db/schema";
-import { eq, and, sql } from "drizzle-orm";
-import { isTemplateLiteralTypeNode } from "typescript";
-import { error } from "better-auth/api";
+import { eq, and, isNotNull } from "drizzle-orm";
 
 const router = Router();
 
@@ -32,6 +30,10 @@ export async function streakEngine() {
   const today = new Date().toISOString().split("T")[0];
 
   for (const habit of allHabits) {
+    // Prevents double counting
+    if (habit.lastCheckedInDate === today) {
+      continue;
+    }
     // checks if habit is checked as done by the user
     if (habit.done) {
       await db
@@ -40,6 +42,7 @@ export async function streakEngine() {
           currentStreak: habit.currentStreak + 1,
           longestStreak: Math.max(habit.longestStreak, habit.currentStreak + 1),
           totalCompleted: habit.totalCompleted + 1,
+          lastProcessedDate: today,
           done: false,
           updatedAt: new Date(),
         })
@@ -52,18 +55,21 @@ export async function streakEngine() {
           id: crypto.randomUUID(),
           userId: habit.userId,
           habitId: habit.id,
+
           date: today as string,
           status: "completed",
         })
         .returning();
     }
     // runs if habit was unchecked but freeze is active
-    else if (habit.freezes > 0) {
+    else if (habit.frozen) {
       await db
         .update(habits)
         .set({
           done: false,
+          frozen: false,
           freezes: habit.freezes - 1,
+          lastProcessedDate: today,
           totalSkipped: habit.totalSkipped + 1,
           updatedAt: new Date(),
         })
@@ -86,6 +92,7 @@ export async function streakEngine() {
         .set({
           done: false,
           totalFailed: habit.totalFailed + 1,
+          lastProcessedDate: today,
           currentStreak: 0,
           updatedAt: new Date(),
         })
@@ -139,6 +146,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       .values({
         id: crypto.randomUUID(),
         name,
+        freezesUsed: 0,
         minimumInput,
         color,
         createdAt: new Date(),
@@ -159,6 +167,7 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const session = (req as any).session;
+      const today = new Date().toISOString().split("T")[0];
 
       const rawId = req.params.id;
 
@@ -178,10 +187,15 @@ router.patch(
         return;
       }
 
+      if (habit.lastCheckedInDate === today || habit.done) {
+        res.status(400).json({ error: "Already checked in today" });
+        return;
+      }
+
       const [updatedHabit] = await db
         .update(habits)
         .set({
-          done: !habit.done,
+          done: true,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
@@ -243,17 +257,42 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
       .from(habits)
       .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
 
-    if (!habit) {
+    if (!habit || habit.deletedAt) {
       return res.status(404).json({ error: "Habit does not exist" });
     }
 
-    await db
-      .delete(habits)
-      .where(and(eq(habits.userId, session.user.id), eq(habits.id, id)));
+    const [updated] = await db
+      .update(habits)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(habits.userId, session.user.id), eq(habits.id, id)))
+      .returning();
+
+    return res
+      .status(200)
+      .json({ message: "Habit deleted successfully", habit: updated });
   } catch (err) {
     return res.status(400).json({ error: err });
   }
 });
+
+router.patch(
+  ":/id/restore",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const session = (req as any).session;
+    const id = req.params.id;
+
+    if (typeof id !== "string" || !id) {
+      res.status(400).json({ error: "Id is invalid" });
+      return;
+    }
+
+    const [restoredHabit] = await db
+      .update(habits)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .returning();
+  },
+);
 
 router.get("/:id/logs", requireAuth, async (req: Request, res: Response) => {
   try {

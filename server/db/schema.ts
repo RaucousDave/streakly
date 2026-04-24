@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -83,14 +84,23 @@ export const habits = pgTable("habits", {
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
-  freezes: integer("freezes").notNull().default(1),
+
+  frozen: boolean("frozen").default(false).notNull(),
+  freezes: integer("freezes").default(0).notNull(),
   maximumStreak: integer("maximum_streak").notNull().default(0),
   currentStreak: integer("current_streak").notNull().default(0),
+  freezesUsed: integer("freezes_used").notNull(),
+  freezeResetDate: timestamp("freeze_reset_date").default(
+    sql`CURRENT_TIMESTAMP`,
+  ),
   longestStreak: integer("longest_streak").notNull().default(0),
   totalCompleted: integer("total_completed").notNull().default(0),
+  lastCheckedInDate: text("last_checked_in_date"),
+  lastProcessedDate: text("last_processed_date"),
   totalSkipped: integer("total_skipped").notNull().default(0),
   totalFailed: integer("total_failed").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const habitLogs = pgTable("habit_logs", {
@@ -102,8 +112,19 @@ export const habitLogs = pgTable("habit_logs", {
     .references(() => habits.id, { onDelete: "cascade" })
     .notNull(),
   date: text("date").notNull(),
-  status: text("status").notNull(),
+  status: text("status", {
+    enum: ["skipped", "completed", "failed"],
+  }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const milestones = pgTable("milestones", {
+  id: text("id").notNull().primaryKey(),
+  habitId: text("habit_id").references(() => habits.id, {
+    onDelete: "cascade",
+  }),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  reachedAt: timestamp("reached_at").defaultNow().notNull(),
 });
 
 export type User = typeof user.$inferSelect;
