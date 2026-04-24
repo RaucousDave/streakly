@@ -65,7 +65,7 @@ export async function checkAndWriteMilestone(
 
     if (existing.length > 0) return;
 
-    const [newMilestone] = await db
+    await db
       .insert(milestones)
       .values({
         id: crypto.randomUUID(),
@@ -134,7 +134,7 @@ export async function freezeResetEngine() {
 
 export async function streakEngine() {
   const allHabits = await db.select().from(habits);
-  const today = new Date()
+  const today = new Date();
 
   for (const habit of allHabits) {
     if (habit.done) {
