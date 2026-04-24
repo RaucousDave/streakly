@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { use } from "react";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -9,10 +10,12 @@ export interface Habit {
   color: string;
   done: boolean;
   freezes: number;
+  frozen: boolean;
   maximumStreak: number;
   currentStreak: number;
   longestStreak: number;
   totalCompleted: number;
+  freezesUsed: number;
   totalSkipped: number;
   totalFailed: number;
   userId: string;
@@ -27,6 +30,11 @@ export interface UpdateHabitPayload {
   name?: string;
   minimumInput?: string;
   color?: string;
+}
+export interface FreezeHabitPayload {
+  freezes: number;
+  frozen: boolean;
+  freezesUsed: number;
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -67,11 +75,28 @@ export const habitsApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }).then((r) => r.habits),
-
+  freeze: (id: string) =>
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ frozen: true }),
+    }).then((r) => r.habits),
   delete: (id: string) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
       method: "DELETE",
     }),
+  history: (id: string) =>
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+      method: "GET",
+    }).then((r) => r.habits),
+
+  stats: (id: string) =>
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+      method: "GET",
+    }).then((r) => r.habits),
+  logs: (id: string) =>
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+      method: "GET",
+    }).then((r) => r.habits),
 };
 
 export const habitKeys = {
@@ -166,5 +191,65 @@ export function useDeleteHabit() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
     },
+  });
+}
+
+export function useFreezeHabit() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: habitsApi.freeze,
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: habitKeys.all });
+      const previous = queryClient.getQueryData<Habit[]>(habitKeys.all);
+
+      queryClient.setQueryData<Habit[]>(habitKeys.all, (old) =>
+        old?.map((h) =>
+          h.id === id
+            ? {
+                ...h,
+                frozen: true,
+                freezes: h.freezes - 1,
+                freezesUsed: h.freezesUsed + 1,
+              }
+            : h,
+        ),
+      );
+
+      return { previous };
+    },
+
+    onError(_err, _id, context) {
+      if (context?.previous) {
+        queryClient.setQueryData(habitKeys.all, context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: habitKeys.all });
+    },
+  });
+}
+
+export function useGetLogs(habitId: string) {
+  return useQuery({
+    queryKey: [habitKeys.all, habitId],
+    queryFn: () => habitsApi.logs(habitId),
+    enabled: !!habitId,
+  });
+} 
+
+export function useGetStats(habitId: string) {
+  return useQuery({
+    queryKey: [habitKeys.all, habitId],
+    queryFn: () => habitsApi.stats(habitId),
+    enabled: !!habitId,
+  });
+}
+
+export function useGetHistory(habitLogsId: string) {
+  return useQuery({
+    queryKey: [habitKeys.all, habitLogsId],
+    queryFn: () => habitsApi.history(habitLogsId),
+    enabled: !!habitLogsId,
   });
 }

@@ -84,9 +84,17 @@ export const habits = pgTable("habits", {
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
+<<<<<<< HEAD
 
   frozen: boolean("frozen").default(false).notNull(),
   freezes: integer("freezes").default(0).notNull(),
+=======
+  frozen: boolean("frozen").notNull().default(false),
+  freezes: integer("freezes").notNull().default(1),
+  freezesUsed: integer("freezes_used").default(0).notNull(),
+  freezeResetDate: timestamp("freeze_reset_date"),
+  lastProcessedDate: timestamp("last_processed_date"),
+>>>>>>> f1d0daa (refactor: modified habit updates route to allow freezes)
   maximumStreak: integer("maximum_streak").notNull().default(0),
   currentStreak: integer("current_streak").notNull().default(0),
   freezesUsed: integer("freezes_used").notNull(),
