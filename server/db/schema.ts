@@ -85,6 +85,7 @@ export const habits = pgTable("habits", {
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
+  frozen: boolean("frozen").notNull().default(false),
   freezes: integer("freezes").notNull().default(1),
   freezesUsed: integer("freezes_used").default(0).notNull(),
   freezeResetDate: timestamp("freeze_reset_date"),

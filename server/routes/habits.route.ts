@@ -299,7 +299,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     const session = (req as any).session;
     const id = req.params.id;
 
-    const { name, minimumInput, color } = await req.body;
+    const { name, minimumInput, color, frozen } = await req.body;
 
     if (typeof id !== "string" || !id) {
       return res.status(400).json({ error: "Id is invalid" });
@@ -309,6 +309,26 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
     if (!habit) {
       return res.status(400).json({ error: "Habit does not exist" });
+    }
+
+    if (frozen as boolean) {
+      if (habit?.freezes === 0) {
+        return res.status(400).json({ error: "No freezes remaining" });
+      }
+
+      const [frozenHabit] = await db
+        .update(habits)
+        .set({
+          freezes: Number(habits.freezes ?? 0) - 1,
+          freezesUsed: Number (habits.freezesUsed ?? 0) + 1,
+          frozen: true,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+
+      return res
+        .status(200)
+        .json({ message: "Habit frozen successfully", habit: frozenHabit });
     }
 
     const [updatedHabit] = await db
