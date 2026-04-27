@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { use } from "react";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -30,11 +29,19 @@ export interface UpdateHabitPayload {
   name?: string;
   minimumInput?: string;
   color?: string;
+  frozen?: boolean;
 }
 export interface FreezeHabitPayload {
   freezes: number;
   frozen: boolean;
   freezesUsed: number;
+}
+
+export interface HabitStats {
+  currentStreak: number;
+  longestStreak: number;
+  completionRate: number;
+  totalCompleted: number;
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -90,9 +97,9 @@ export const habitsApi = {
     }).then((r) => r.habits),
 
   stats: (id: string) =>
-    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+    apiFetch<{ stats: HabitStats }>(`/api/habits/${id}/stats`, {
       method: "GET",
-    }).then((r) => r.habits),
+    }).then((r) => r.stats),
   logs: (id: string) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
       method: "GET",
@@ -135,7 +142,7 @@ export function useCheckIn() {
           h.id === id
             ? {
                 ...h,
-                done: !h.done,
+                done: true,
               }
             : h,
         ),
@@ -232,24 +239,24 @@ export function useFreezeHabit() {
 
 export function useGetLogs(habitId: string) {
   return useQuery({
-    queryKey: [habitKeys.all, habitId],
-    queryFn: () => habitsApi.logs(habitId),
+    queryKey: [...habitKeys.all, "logs", habitId],
+    queryFn: async () => await habitsApi.logs(habitId),
     enabled: !!habitId,
   });
-} 
+}
 
 export function useGetStats(habitId: string) {
   return useQuery({
-    queryKey: [habitKeys.all, habitId],
-    queryFn: () => habitsApi.stats(habitId),
+    queryKey: [...habitKeys.all, "stats", habitId],
+    queryFn: async () => await habitsApi.stats(habitId),
     enabled: !!habitId,
   });
 }
 
 export function useGetHistory(habitLogsId: string) {
   return useQuery({
-    queryKey: [habitKeys.all, habitLogsId],
-    queryFn: () => habitsApi.history(habitLogsId),
+    queryKey: [...habitKeys.all, "history", habitLogsId],
+    queryFn: async () => await habitsApi.history(habitLogsId),
     enabled: !!habitLogsId,
   });
 }

@@ -290,15 +290,6 @@ router.patch(
         status: "completed" | "skipped" | "failed";
       };
 
-      await db.insert(habitLogs).values({
-        id: crypto.randomUUID(),
-        userId: session.user.id,
-        habitId: id,
-        date: date ?? today,
-        status: status ?? "completed",
-        createdAt: new Date(),
-      });
-
       const logs = await db
         .select()
         .from(habitLogs)
@@ -323,7 +314,7 @@ router.patch(
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
 
       if (!habit) {
-        res.status(400).json({ error: "Habit not found" });
+        res.status(404).json({ error: "Habit not found" });
         return;
       }
 
@@ -332,10 +323,20 @@ router.patch(
         return;
       }
 
+      await db.insert(habitLogs).values({
+        id: crypto.randomUUID(),
+        userId: session.user.id,
+        habitId: id,
+        date: date ?? today,
+        status: status ?? "completed",
+        createdAt: new Date(),
+      });
+
       const [updatedHabit] = await db
         .update(habits)
         .set({
           done: true,
+          lastCheckedInDate: today,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
@@ -344,7 +345,7 @@ router.patch(
       await checkAndWriteMilestone(id, session.user.id, currentStreak);
       return res.status(200).json({ message: updatedHabit });
     } catch (err) {
-      return res.status(400).json({ message: "Something went wrong", err });
+      return res.status(500).json({ message: "Internal Server Error   " });
     }
   },
 );
@@ -355,7 +356,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     const session = (req as any).session;
     const id = req.params.id;
 
-    const { name, minimumInput, color, frozen } = await req.body;
+    const { name, minimumInput, color, frozen } = req.body;
 
     if (typeof id !== "string" || !id) {
       return res.status(400).json({ error: "Id is invalid" });
@@ -367,7 +368,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Habit does not exist" });
     }
 
-    if (frozen as boolean) {
+    if (frozen === true) {
       if (habit?.freezes === 0) {
         return res.status(400).json({ error: "No freezes remaining" });
       }
@@ -375,12 +376,13 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       const [frozenHabit] = await db
         .update(habits)
         .set({
-          freezes: Number(habits.freezes ?? 0) - 1,
-          freezesUsed: Number (habits.freezesUsed ?? 0) + 1,
+          freezes: Number(habit.freezes ?? 0) - 1,
+          freezesUsed: Number(habit.freezesUsed ?? 0) + 1,
           frozen: true,
           updatedAt: new Date(),
         })
-        .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+        .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
+        .returning();
 
       return res
         .status(200)
@@ -395,11 +397,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
         ...(color && { color }),
         updatedAt: new Date(),
       })
-      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
+      .returning();
 
     return res.status(200).json({ success: true, message: updatedHabit });
   } catch (err) {
-    return res.status(400).json({ error: "something went wrong" });
+    return res.status(500).json({ error: "Internal server error", err });
   }
 });
 
@@ -520,70 +523,6 @@ router.get("/:id/history", requireAuth, async (req: Request, res: Response) => {
       .where(and(eq(habitLogs.id, id), gte(habitLogs.date, sixteenWeeksAgo)));
 
     return res.status(200).json({ message: logs });
-  } catch (err) {
-    return res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-router.get("/:id/stats", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-    const logs = await db
-      .select()
-      .from(habitLogs)
-      .where(eq(habitLogs.habitId, id))
-      .orderBy(habitLogs.date);
-
-    if (logs.length === 0) {
-      return res.json({
-        completionRate: 0,
-        currentStreak: 0,
-        longestStreak: 0,
-        totalCompleted: 0,
-        totalLogs: 0,
-      });
-    }
-
-    const totalCompleted = logs.filter(
-      (log) => log.status === "completed",
-    ).length;
-    const relevantLogs = logs.filter((log) => log.status !== "skipped").length;
-    const completionRate = Math.round((totalCompleted / relevantLogs) * 100);
-
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let tempStreak = 0;
-
-    const sortedDesc = [...logs].sort((a, b) => b.date.localeCompare(a.date));
-    for (const log of sortedDesc) {
-      if (log.status === "completed") {
-        currentStreak++;
-      } else if (log.status === "skipped") {
-        continue;
-      } else {
-        break;
-      }
-    }
-
-    for (const log of logs) {
-      if (log.status === "completed") {
-        tempStreak++;
-        longestStreak = Math.max(longestStreak, tempStreak);
-      } else if (log.status === "skipped") {
-        continue;
-      } else {
-        tempStreak = 0;
-      }
-    }
-
-    return res.json({
-      currentStreak,
-      longestStreak,
-      relevantLogs,
-      completionRate,
-      totalCompleted,
-      totalLogs: logs.length,
-    });
   } catch (err) {
     return res.status(500).json({ error: "Something went wrong" });
   }
