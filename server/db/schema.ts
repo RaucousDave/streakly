@@ -14,6 +14,11 @@ export const user = pgTable("user", {
   image: text("image"),
   emailVerified: boolean("email_verified").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  freezesUsed: integer("freezes_used").notNull().default(0),
+  freezeResetDate: timestamp("freeze_reset_date").default(
+    sql`CURRENT_TIMESTAMP`,
+  ),
+  freezes: integer("freezes").default(2).notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -44,6 +49,7 @@ export const account = pgTable("account", {
   accessTokenExpiresAt: timestamp("access_token_expires_at"),
   refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
   scope: text("scope"),
+
   password: text("password"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -84,15 +90,10 @@ export const habits = pgTable("habits", {
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
-
   frozen: boolean("frozen").default(false).notNull(),
-  freezes: integer("freezes").default(2).notNull(),
   maximumStreak: integer("maximum_streak").notNull().default(0),
   currentStreak: integer("current_streak").notNull().default(0),
-  freezesUsed: integer("freezes_used").notNull().default(0),
-  freezeResetDate: timestamp("freeze_reset_date").default(
-    sql`CURRENT_TIMESTAMP`,
-  ),
+
   longestStreak: integer("longest_streak").notNull().default(0),
   totalCompleted: integer("total_completed").notNull().default(0),
   lastCheckedInDate: text("last_checked_in_date"),

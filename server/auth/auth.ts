@@ -4,7 +4,6 @@ import { db } from "../db/db";
 
 import * as schema from "../db/schema";
 
-
 console.log("CURRENT_NODE_ENV: ", process.env.NODE_ENV);
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -13,7 +12,7 @@ export const auth = betterAuth({
   }),
 
   emailAndPassword: {
-    enabled: process.env.NODE_ENV === "development",
+    enabled: true,
     requireEmailVerification: false,
   },
 
@@ -23,7 +22,6 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     },
   },
-  
 
   session: {
     expiresIn: 60 * 60 * 24 * 7,
@@ -38,7 +36,7 @@ export const auth = betterAuth({
   trustedOrigins: [process.env.CLIENT_URL ?? "http://localhost:5173"],
 
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === "production",
+    useSecureCookies: process.env.NODE_ENV === "development",
     generateId: () => crypto.randomUUID(),
   },
 });

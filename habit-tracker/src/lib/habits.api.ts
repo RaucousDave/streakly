@@ -2,24 +2,32 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+type HabitStatus = "completed" | "skipped" | "failed";
 export interface Habit {
   id: string;
   name: string;
   minimumInput: string;
   color: string;
   done: boolean;
-  freezes: number;
+
   frozen: boolean;
   maximumStreak: number;
   currentStreak: number;
   longestStreak: number;
   totalCompleted: number;
-  freezesUsed: number;
+
+  completionRate: number;
+
   totalSkipped: number;
   totalFailed: number;
   userId: string;
 }
-
+export interface User {
+  id: string;
+  name: string;
+  freezesUsed: number;
+  freezes: number;
+}
 export interface CreateHabitPayload {
   name: string;
   minimumInput: string;
@@ -37,13 +45,16 @@ export interface FreezeHabitPayload {
   freezesUsed: number;
 }
 
+export interface HabitLogs {
+  status: HabitStatus;
+}
 export interface HabitStats {
   currentStreak: number;
   longestStreak: number;
-  completionRate: number;
   totalCompleted: number;
-}
 
+  completionRate: number;
+}
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     credentials: "include",
@@ -63,6 +74,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const habitsApi = {
+  user: () =>
+    apiFetch<{ userData: User }>("/api/user/me").then((r) => r.userData),
+
   getAll: () =>
     apiFetch<{ habits: Habit[] }>("/api/habits").then((r) => r.habits),
 
@@ -73,9 +87,9 @@ export const habitsApi = {
     }).then((r) => r.habits),
 
   checkIn: (id: string) =>
-    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/checkin`, {
+    apiFetch<{ habit: Habit }>(`/api/habits/${id}/checkin`, {
       method: "PATCH",
-    }).then((r) => r.habits),
+    }).then((r) => r.habit),
 
   update: (id: string, payload: UpdateHabitPayload) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
@@ -92,27 +106,36 @@ export const habitsApi = {
       method: "DELETE",
     }),
   history: (id: string) =>
-    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/history`, {
       method: "GET",
     }).then((r) => r.habits),
 
   stats: (id: string) =>
-    apiFetch<{ stats: HabitStats }>(`/api/habits/${id}/stats`, {
-      method: "GET",
-    }).then((r) => r.stats),
-  logs: (id: string) =>
-    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/history`, {
       method: "GET",
     }).then((r) => r.habits),
+  logs: (id: string) =>
+    apiFetch<{ logs: HabitLogs[] }>(`/api/habits/${id}/logs`, {
+      method: "GET",
+    }).then((r) => r.logs),
 };
 
 export const habitKeys = {
   all: ["habits"] as const,
+  lists: () => [...habitKeys.all, "list"] as const,
+  user: () => [...habitKeys.all, "user"] as const,
 };
+
+export function useUser() {
+  return useQuery({
+    queryKey: habitKeys.user(),
+    queryFn: habitsApi.user,
+  });
+}
 
 export function useHabits() {
   return useQuery({
-    queryKey: habitKeys.all,
+    queryKey: habitKeys.lists(),
     queryFn: habitsApi.getAll,
   });
 }
@@ -136,13 +159,15 @@ export function useCheckIn() {
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: habitKeys.all });
 
-      const previous = queryClient.getQueryData<Habit[]>(habitKeys.all);
-      queryClient.setQueryData<Habit[]>(habitKeys.all, (old) =>
+      const previous = queryClient.getQueryData<Habit[]>(habitKeys.lists());
+      queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
         old?.map((h) =>
           h.id === id
             ? {
                 ...h,
                 done: true,
+                status: "completed",
+                lastCheckedInDate: new Date().toISOString().split("T")[0],
               }
             : h,
         ),
@@ -151,7 +176,7 @@ export function useCheckIn() {
     },
     onError: (_err, _id, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(habitKeys.all, context.previous);
+        queryClient.setQueryData(habitKeys.lists(), context.previous);
       }
     },
     onSettled: () => {
@@ -182,9 +207,9 @@ export function useDeleteHabit() {
     mutationFn: habitsApi.delete,
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: habitKeys.all });
-      const previous = queryClient.getQueryData<Habit[]>(habitKeys.all);
+      const previous = queryClient.getQueryData<Habit[]>(habitKeys.lists());
 
-      queryClient.setQueryData<Habit[]>(habitKeys.all, (old) =>
+      queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
         old?.filter((h) => h.id !== id),
       );
 
@@ -192,7 +217,7 @@ export function useDeleteHabit() {
     },
     onError: (_err, _id, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(habitKeys.all, context.previous);
+        queryClient.setQueryData(habitKeys.lists(), context.previous);
       }
     },
     onSettled: () => {
@@ -208,27 +233,41 @@ export function useFreezeHabit() {
     mutationFn: habitsApi.freeze,
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: habitKeys.all });
-      const previous = queryClient.getQueryData<Habit[]>(habitKeys.all);
+      const previousHabits = queryClient.getQueryData<Habit[]>(
+        habitKeys.lists(),
+      );
+      const previousUser = queryClient.getQueryData<User>(habitKeys.user());
 
-      queryClient.setQueryData<Habit[]>(habitKeys.all, (old) =>
+      queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
         old?.map((h) =>
           h.id === id
             ? {
                 ...h,
                 frozen: true,
-                freezes: h.freezes - 1,
-                freezesUsed: h.freezesUsed + 1,
               }
             : h,
         ),
       );
 
-      return { previous };
+      queryClient.setQueryData<User>(habitKeys.user(), (old) =>
+        old
+          ? {
+              ...old,
+              freezes: Math.max(0, old.freezes - 1),
+              freezesUsed: old.freezesUsed + 1,
+            }
+          : old,
+      );
+
+      return { previousHabits, previousUser };
     },
 
     onError(_err, _id, context) {
-      if (context?.previous) {
-        queryClient.setQueryData(habitKeys.all, context.previous);
+      if (context?.previousHabits !== undefined) {
+        queryClient.setQueryData(habitKeys.lists(), context.previousHabits);
+      }
+      if (context?.previousUser !== undefined) {
+        queryClient.setQueryData(habitKeys.user(), context.previousUser);
       }
     },
     onSettled: () => {
@@ -245,18 +284,15 @@ export function useGetLogs(habitId: string) {
   });
 }
 
-export function useGetStats(habitId: string) {
-  return useQuery({
-    queryKey: [...habitKeys.all, "stats", habitId],
-    queryFn: async () => await habitsApi.stats(habitId),
-    enabled: !!habitId,
-  });
-}
-
 export function useGetHistory(habitLogsId: string) {
   return useQuery({
     queryKey: [...habitKeys.all, "history", habitLogsId],
-    queryFn: async () => await habitsApi.history(habitLogsId),
+    queryFn: async () => {
+      const data = await habitsApi.history(habitLogsId);
+      if (data === undefined) {
+        return null;
+      }
+    },
     enabled: !!habitLogsId,
   });
 }

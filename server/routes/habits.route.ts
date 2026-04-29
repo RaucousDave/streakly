@@ -8,15 +8,19 @@ import {
 import { auth } from "../auth/auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { db } from "../db/db";
-import { habitLogs, milestones } from "../db/schema";
+import { habitLogs, milestones, user } from "../db/schema";
 import { habits } from "../db/schema";
 import { eq, and, isNotNull, gte, inArray } from "drizzle-orm";
 import { format, subWeeks } from "date-fns";
-import { includes } from "zod";
+import { revokeSession } from "better-auth/api";
 
 const router = Router();
 
-async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -49,6 +53,10 @@ const FREEZE_TIERS = [
 
 const MILESTONE_THRESHOLDS = [7, 30, 100] as const;
 
+function getDateKey(date = new Date()) {
+  return format(date, "yyyy-MM-dd");
+}
+
 export async function checkAndWriteMilestone(
   habitId: string,
   userId: string,
@@ -59,7 +67,11 @@ export async function checkAndWriteMilestone(
       .select()
       .from(milestones)
       .where(
-        and(eq(milestones.habitId, habitId), eq(milestones.userId, userId)),
+        and(
+          eq(milestones.habitId, habitId),
+          eq(milestones.userId, userId),
+          eq(milestones.streakCount, currentStreak),
+        ),
       )
       .limit(1);
 
@@ -82,14 +94,14 @@ function getFreezesForRate(rate: number): number {
 }
 
 export async function freezeResetEngine() {
+  const allUsers = await db.select().from(user);
   const allHabits = await db.select().from(habits);
 
-  const userHabitMap = new Map<String, string[]>();
+  const userHabitMap = new Map<string, string[]>();
   for (const habit of allHabits) {
-    if (userHabitMap.has(habit.userId)) {
-      userHabitMap.set(habit.userId, []);
-    }
-    userHabitMap.get(habit.userId)!.push(habit.id);
+    const list = userHabitMap.get(habit.userId) ?? [];
+    list.push(habit.id);
+    userHabitMap.set(habit.userId, list);
   }
 
   const today = new Date();
@@ -118,36 +130,36 @@ export async function freezeResetEngine() {
     const newFreezes = getFreezesForRate(completionRate);
 
     // weekly freeze reset
-    for (const habitId of habitIds) {
-      await db
-        .update(habits)
-        .set({
-          freezes: newFreezes,
-          freezesUsed: 0,
-          freezeResetDate: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(habits.id, habitId));
-    }
+
+    await db
+      .update(user)
+      .set({
+        freezes: newFreezes,
+        freezesUsed: 0,
+        freezeResetDate: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, userId));
   }
 }
 
 export async function streakEngine() {
   const allHabits = await db.select().from(habits);
-  const today = new Date().toISOString().split("T")[0];
-
+  const today = getDateKey();
   for (const habit of allHabits) {
     // Prevents double counting
-    if (habit.lastCheckedInDate === today) {
+    if (habit.lastProcessedDate === today) {
       continue;
     }
     // checks if habit is checked as done by the user
     if (habit.done) {
+      const nextStreak = habit.currentStreak + 1;
+
       await db
         .update(habits)
         .set({
-          currentStreak: habit.currentStreak + 1,
-          longestStreak: Math.max(habit.longestStreak, habit.currentStreak + 1),
+          currentStreak: nextStreak,
+          longestStreak: Math.max(habit.longestStreak, nextStreak),
           totalCompleted: habit.totalCompleted + 1,
           lastProcessedDate: today,
           done: false,
@@ -167,6 +179,8 @@ export async function streakEngine() {
           status: "completed",
         })
         .returning();
+
+      await checkAndWriteMilestone(habit.id, habit.userId, nextStreak);
     }
     // runs if habit was unchecked but freeze is active
     else if (habit.frozen) {
@@ -174,9 +188,7 @@ export async function streakEngine() {
         .update(habits)
         .set({
           done: false,
-          frozen: false,
-          freezes: habit.freezes - 1,
-          freezesUsed: habit.freezesUsed + 1,
+          frozen: true,
           lastProcessedDate: today,
           totalSkipped: habit.totalSkipped + 1,
           updatedAt: new Date(),
@@ -254,7 +266,6 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       .values({
         id: crypto.randomUUID(),
         name,
-        freezesUsed: 0,
         minimumInput,
         color,
         createdAt: new Date(),
@@ -275,7 +286,8 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const session = (req as any).session;
-      const today = new Date().toISOString().split("T")[0];
+      const today = getDateKey();
+      console.log("Today: ", today);
 
       const rawId = req.params.id;
 
@@ -285,29 +297,23 @@ router.patch(
 
       const id = rawId;
 
-      const { date, status } = req.body as {
-        date: string;
-        status: "completed" | "skipped" | "failed";
+      const body = (req.body ?? {}) as {
+        date?: string;
+        status?: "completed" | "skipped" | "failed";
       };
 
-      const logs = await db
-        .select()
-        .from(habitLogs)
-        .where(eq(habitLogs.habitId, id))
-        .orderBy(habitLogs.date);
-
-      const sortedDesc = [...logs].sort((a, b) => b.date.localeCompare(a.date));
-
-      let currentStreak = 0;
-      for (const log of logs) {
-        if (log.status === "completed") {
-          currentStreak++;
-        } else if (log.status === "skipped") {
-          continue;
-        } else {
-          break;
-        }
+      if (body.date && body.date !== today) {
+        return res.status(400).json({
+          error: "Check-in only supports today's date",
+        });
       }
+
+      if (body.status && body.status !== "completed") {
+        return res.status(400).json({
+          error: "Check-in only supports completed status",
+        });
+      }
+
       const [habit] = await db
         .select()
         .from(habits)
@@ -318,19 +324,10 @@ router.patch(
         return;
       }
 
-      if (habit.lastCheckedInDate === today || habit.done) {
+      if (habit.lastCheckedInDate === today) {
         res.status(400).json({ error: "Already checked in today" });
         return;
       }
-
-      await db.insert(habitLogs).values({
-        id: crypto.randomUUID(),
-        userId: session.user.id,
-        habitId: id,
-        date: date ?? today,
-        status: status ?? "completed",
-        createdAt: new Date(),
-      });
 
       const [updatedHabit] = await db
         .update(habits)
@@ -342,10 +339,10 @@ router.patch(
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
         .returning();
 
-      await checkAndWriteMilestone(id, session.user.id, currentStreak);
-      return res.status(200).json({ message: updatedHabit });
+      return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
-      return res.status(500).json({ message: "Internal Server Error   " });
+      console.log("Checking error: ", err);
+      return res.status(500).json({ message: "Internal Server Error" });
     }
   },
 );
@@ -363,25 +360,37 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     const [habit] = await db.select().from(habits).where(eq(habits.id, id));
+    const [User] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, session.user.id));
 
     if (!habit) {
       return res.status(400).json({ error: "Habit does not exist" });
     }
+    if (!User) return res.status(400).json({ error: "User does not exist" });
 
     if (frozen === true) {
-      if (habit?.freezes === 0) {
+      if (User?.freezes === 0) {
         return res.status(400).json({ error: "No freezes remaining" });
       }
 
       const [frozenHabit] = await db
         .update(habits)
         .set({
-          freezes: Number(habit.freezes ?? 0) - 1,
-          freezesUsed: Number(habit.freezesUsed ?? 0) + 1,
           frozen: true,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
+        .returning();
+
+      await db
+        .update(user)
+        .set({
+          freezes: Number(User.freezes ?? 0) - 1,
+          freezesUsed: Number(User.freezesUsed ?? 0) + 1,
+        })
+        .where(eq(user.id, session.user.id))
         .returning();
 
       return res

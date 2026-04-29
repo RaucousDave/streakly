@@ -12,13 +12,14 @@ import habitRouter, {
   freezeResetEngine,
   streakEngine,
 } from "./routes/habits.route";
+import userRouter from "./routes/user.route";
 import cron from "node-cron";
 const app = express();
 
 // Client <-> Server Connection
 app.use(
   cors({
-    origin: process.env.CLIENT_URL ?? "http://localhost:5173", // ← fix this too, missing localhost
+    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   }),
@@ -40,6 +41,7 @@ app.use((req, res, next) => {
 });
 // 3. your routes
 app.use("/api/habits", habitRouter);
+app.use("/api/user", userRouter);
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
