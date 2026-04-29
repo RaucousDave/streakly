@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Check, Flame, Snowflake, Trash2 } from "lucide-react";
+import { Check, Flame, RotateCcw, Snowflake, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   type Habit,
   type User,
+  useRestore,
 } from "@/lib/habits.api";
 import {
   COLOR_MAP,
@@ -30,13 +31,17 @@ export function HabitCard({
 }: HabitCardProps) {
   const [burst, setBurst] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const restoreHabit = useRestore();
   const colors = COLOR_MAP[habit.color] ?? fallbackColor;
   const freezesLeft = user?.freezes ?? 0;
   const freezesUsed = user?.freezesUsed ?? 0;
+  const isDeleted = Boolean(habit.deletedAt);
 
-  const canFreeze = !habit.frozen && freezesLeft > 0;
+  const canFreeze = !habit.frozen && freezesLeft > 0 && !isDeleted;
 
   const handleToggle = () => {
+    if (isDeleted) return;
+
     if (!habit.done) {
       setBurst(true);
       setTimeout(() => setBurst(false), 600);
@@ -49,12 +54,25 @@ export function HabitCard({
     onFreeze(habit.id);
   };
 
+  const handleRestore = () => {
+    if (restoreHabit.isPending) return;
+    setConfirmDelete(false);
+    restoreHabit.mutate(habit.id);
+  };
+
   return (
-    <Card className="border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition-all duration-200">
+    <Card
+      className={`border bg-zinc-900 transition-all duration-200 ${
+        isDeleted
+          ? "border-amber-500/30 bg-amber-500/5"
+          : "border-zinc-800 hover:border-zinc-700"
+      }`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <Button
             onClick={handleToggle}
+            disabled={isDeleted}
             className={`mt-0.5 w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 ${colors.ring} ${
               habit.done
                 ? `${colors.check} border-transparent`
@@ -69,7 +87,13 @@ export function HabitCard({
             <div className="flex items-center gap-2 mb-0.5">
               <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
               <p
-                className={`font-semibold text-sm ${habit.done ? "line-through text-zinc-600" : "text-zinc-100"}`}
+                className={`font-semibold text-sm ${
+                  isDeleted
+                    ? "text-zinc-500 line-through"
+                    : habit.done
+                      ? "line-through text-zinc-600"
+                      : "text-zinc-100"
+                }`}
               >
                 {habit.name}
               </p>
@@ -79,7 +103,11 @@ export function HabitCard({
             </p>
 
             <div className="ml-4 mt-2 flex flex-wrap items-center gap-2">
-              {habit.frozen ? (
+              {isDeleted ? (
+                <span className="flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/15 border border-amber-500/25 rounded-full px-2 py-0.5">
+                  <Trash2 className="w-3 h-3" aria-hidden="true" /> Deleted
+                </span>
+              ) : habit.frozen ? (
                 <span className="flex items-center gap-1 text-[11px] text-sky-300 bg-sky-500/15 border border-sky-500/25 rounded-full px-2 py-0.5">
                   <Snowflake className="w-3 h-3" aria-hidden="true" /> Frozen today
                 </span>
@@ -103,7 +131,19 @@ export function HabitCard({
             </div>
             <span className="text-[10px] text-zinc-600">day streak</span>
 
-            {confirmDelete ? (
+            {isDeleted ? (
+              <Button
+                onClick={handleRestore}
+                disabled={restoreHabit.isPending}
+                variant="ghost"
+                size="sm"
+                className="mt-1 h-7 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20 hover:text-amber-100"
+                aria-label="Restore habit"
+              >
+                <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                {restoreHabit.isPending ? "Restoring..." : "Restore"}
+              </Button>
+            ) : confirmDelete ? (
               <div className="flex items-center gap-1.5 mt-1">
                 <button
                   onClick={() => onDelete(habit.id)}
@@ -131,7 +171,23 @@ export function HabitCard({
           </div>
         </div>
 
-        {!habit.frozen && (
+        {isDeleted ? (
+          <div className="mt-3 pt-3 border-t border-amber-500/15 flex items-center justify-between gap-3">
+            <p className="text-[11px] leading-relaxed text-amber-100/80">
+              This habit was removed from your active list. Restore it if that was accidental.
+            </p>
+            <Button
+              onClick={handleRestore}
+              disabled={restoreHabit.isPending}
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20 hover:text-amber-100"
+            >
+              <RotateCcw className="w-3 h-3" aria-hidden="true" />
+              {restoreHabit.isPending ? "Restoring..." : "Undo delete"}
+            </Button>
+          </div>
+        ) : !habit.frozen && (
           <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between">
             <Button
               onClick={handleFreeze}

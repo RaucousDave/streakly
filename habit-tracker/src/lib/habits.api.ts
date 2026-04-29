@@ -9,6 +9,7 @@ export interface Habit {
   minimumInput: string;
   color: string;
   done: boolean;
+  deletedAt?: string | null;
 
   frozen: boolean;
   maximumStreak: number;
@@ -118,6 +119,10 @@ export const habitsApi = {
     apiFetch<{ logs: HabitLogs[] }>(`/api/habits/${id}/logs`, {
       method: "GET",
     }).then((r) => r.logs),
+  restore: (id: string) =>
+    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/restore`, {
+      method: "PATCH",
+    }).then((r) => r.habits),
 };
 
 export const habitKeys = {
@@ -210,7 +215,14 @@ export function useDeleteHabit() {
       const previous = queryClient.getQueryData<Habit[]>(habitKeys.lists());
 
       queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
-        old?.filter((h) => h.id !== id),
+        old?.map((h) =>
+          h.id === id
+            ? {
+                ...h,
+                deletedAt: new Date().toISOString(),
+              }
+            : h,
+        ),
       );
 
       return { previous };
@@ -218,6 +230,38 @@ export function useDeleteHabit() {
     onError: (_err, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(habitKeys.lists(), context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: habitKeys.all });
+    },
+  });
+}
+
+export function useRestore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: habitsApi.restore,
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: habitKeys.all });
+      const previous = queryClient.getQueryData<Habit[]>(habitKeys.lists());
+      queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
+        old?.map((h) =>
+          h.id === id
+            ? {
+                ...h,
+                deletedAt: null,
+              }
+            : h,
+        ),
+      );
+      return { previous };
+    },
+
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(habitKeys.lists(), context?.previous);
       }
     },
     onSettled: () => {

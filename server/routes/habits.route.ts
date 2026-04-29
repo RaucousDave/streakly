@@ -341,7 +341,7 @@ router.patch(
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
-      console.log("Checking error: ", err);
+      console.log("Checking error: ", er);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   },
