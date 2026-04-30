@@ -72,7 +72,7 @@ export default function Dashboard() {
           freezePending={freezeHabit.isPending}
           onToggle={(id) => checkIn.mutate(id)}
           onDelete={(id) => deleteHabit.mutate(id)}
-          onFreeze={(id) => freezeHabit.mutate(id)}
+          onFreeze={(id, frozen) => freezeHabit.mutate({ id, frozen })}
         />
 
         <AddHabitButton onClick={() => setShowAdd(true)} />

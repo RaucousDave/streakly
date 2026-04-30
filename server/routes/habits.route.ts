@@ -3,16 +3,14 @@ import {
   type Response,
   type NextFunction,
   Router,
-  request,
 } from "express";
 import { auth } from "../auth/auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { db } from "../db/db";
 import { habitLogs, milestones, user } from "../db/schema";
 import { habits } from "../db/schema";
-import { eq, and, isNotNull, gte, inArray } from "drizzle-orm";
+import { eq, and, isNotNull, gte, inArray, ne, isNull } from "drizzle-orm";
 import { format, subWeeks } from "date-fns";
-import { revokeSession } from "better-auth/api";
 
 const router = Router();
 
@@ -53,7 +51,7 @@ const FREEZE_TIERS = [
 
 const MILESTONE_THRESHOLDS = [7, 30, 100] as const;
 
-function getDateKey(date = new Date()) {
+export function getDateKey(date = new Date()) {
   return format(date, "yyyy-MM-dd");
 }
 
@@ -144,18 +142,20 @@ export async function freezeResetEngine() {
 }
 
 export async function streakEngine() {
-  const allHabits = await db.select().from(habits);
+  const allHabits = await db.select().from(habits).where(isNull(habits.deletedAt));
   const today = getDateKey();
+
   for (const habit of allHabits) {
-    // Prevents double counting
     if (habit.lastProcessedDate === today) {
       continue;
     }
-    // checks if habit is checked as done by the user
-    if (habit.done) {
+
+    const completedToday = habit.lastCheckedInDate === today;
+
+    if (completedToday) {
       const nextStreak = habit.currentStreak + 1;
 
-      await db
+      const updatedHabit = await db
         .update(habits)
         .set({
           currentStreak: nextStreak,
@@ -165,26 +165,39 @@ export async function streakEngine() {
           done: false,
           updatedAt: new Date(),
         })
-        .where(eq(habits.id, habit.id));
+        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
+        .returning({ id: habits.id });
 
-      // writes to habitLogs table
-      await db
-        .insert(habitLogs)
-        .values({
+      if (updatedHabit.length === 0) {
+        continue;
+      }
+
+      const [existingLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, habit.id),
+            eq(habitLogs.userId, habit.userId),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
+
+      if (!existingLog) {
+        await db.insert(habitLogs).values({
           id: crypto.randomUUID(),
           userId: habit.userId,
           habitId: habit.id,
-
           date: today as string,
           status: "completed",
-        })
-        .returning();
+        });
+      }
 
       await checkAndWriteMilestone(habit.id, habit.userId, nextStreak);
     }
-    // runs if habit was unchecked but freeze is active
     else if (habit.frozen) {
-      await db
+      const updatedHabit = await db
         .update(habits)
         .set({
           done: false,
@@ -193,21 +206,36 @@ export async function streakEngine() {
           totalSkipped: habit.totalSkipped + 1,
           updatedAt: new Date(),
         })
-        .where(eq(habits.id, habit.id));
+        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
+        .returning({ id: habits.id });
 
-      await db
-        .insert(habitLogs)
-        .values({
+      if (updatedHabit.length === 0) {
+        continue;
+      }
+
+      const [existingLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, habit.id),
+            eq(habitLogs.userId, habit.userId),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
+
+      if (!existingLog) {
+        await db.insert(habitLogs).values({
           id: crypto.randomUUID(),
           userId: habit.userId,
           habitId: habit.id,
           date: today as string,
           status: "skipped",
-        })
-        .returning();
+        });
+      }
     } else {
-      // Update habits
-      await db
+      const updatedHabit = await db
         .update(habits)
         .set({
           done: false,
@@ -216,19 +244,34 @@ export async function streakEngine() {
           currentStreak: 0,
           updatedAt: new Date(),
         })
-        .where(eq(habits.id, habit.id));
+        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
+        .returning({ id: habits.id });
 
-      // Insert logs for habit if failed
-      await db
-        .insert(habitLogs)
-        .values({
+      if (updatedHabit.length === 0) {
+        continue;
+      }
+
+      const [existingLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, habit.id),
+            eq(habitLogs.userId, habit.userId),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
+
+      if (!existingLog) {
+        await db.insert(habitLogs).values({
           id: crypto.randomUUID(),
           userId: habit.userId,
           habitId: habit.id,
           date: today as string,
           status: "failed",
-        })
-        .returning();
+        });
+      }
     }
   }
 }
@@ -239,11 +282,21 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const session = (req as any).session;
+      const today = getDateKey();
 
-      const userHabits = await db
+      const rawHabits = await db
         .select()
         .from(habits)
         .where(eq(habits.userId, session.user.id));
+
+      const userHabits = rawHabits.map((habit) => ({
+        ...habit,
+        done:
+          habit.lastCheckedInDate === today &&
+          habit.lastProcessedDate !== today &&
+          !habit.deletedAt,
+      }));
+
       res.status(200).json({ habits: userHabits });
     } catch (error) {
       res.status(401).json({ message: "Something went wrong", error });
@@ -287,7 +340,6 @@ router.patch(
     try {
       const session = (req as any).session;
       const today = getDateKey();
-      console.log("Today: ", today);
 
       const rawId = req.params.id;
 
@@ -329,6 +381,12 @@ router.patch(
         return;
       }
 
+      if (habit.lastProcessedDate === today) {
+        return res.status(400).json({
+          error: "This habit has already been processed for today",
+        });
+      }
+
       const [updatedHabit] = await db
         .update(habits)
         .set({
@@ -341,7 +399,7 @@ router.patch(
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
-      console.log("Checking error: ", er);
+      console.log("Checking error: ", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   },
@@ -359,7 +417,10 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Id is invalid" });
     }
 
-    const [habit] = await db.select().from(habits).where(eq(habits.id, id));
+    const [habit] = await db
+      .select()
+      .from(habits)
+      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
     const [User] = await db
       .select()
       .from(user)
@@ -373,6 +434,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     if (frozen === true) {
       if (User?.freezes === 0) {
         return res.status(400).json({ error: "No freezes remaining" });
+      }
+
+      if (habit.lastProcessedDate === getDateKey()) {
+        return res.status(400).json({
+          error: "Cannot freeze a habit that has already been processed today",
+        });
       }
 
       const [frozenHabit] = await db
@@ -398,11 +465,54 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
         .json({ message: "Habit frozen successfully", habit: frozenHabit });
     }
 
+    if (frozen === false) {
+      const today = getDateKey();
+
+      const [todayLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, id),
+            eq(habitLogs.userId, session.user.id),
+            eq(habitLogs.date, today),
+            eq(habitLogs.status, "skipped"),
+          ),
+        );
+
+      if (todayLog) {
+        return res
+          .status(400)
+          .json({ error: "Freeze token has already been consumed" });
+      }
+      const [unFrozenHabit] = await db
+        .update(habits)
+        .set({
+          frozen: false,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
+        .returning();
+
+      await db
+        .update(user)
+        .set({
+          freezes: Number(User.freezes ?? 0) + 1,
+          freezesUsed: Math.max(0, Number(User.freezesUsed ?? 0) - 1),
+        })
+        .where(eq(user.id, session.user.id))
+        .returning();
+
+      return res
+        .status(200)
+        .json({ message: "Habit unfrozen successfully", habit: unFrozenHabit });
+    }
+
     const [updatedHabit] = await db
       .update(habits)
       .set({
         ...(name && { name }),
-        ...(minimumInput && { minimumInput }),
+        ...(minimumInput !== undefined && { minimumInput }),
         ...(color && { color }),
         updatedAt: new Date(),
       })
@@ -463,7 +573,13 @@ router.patch(
     const [restoredHabit] = await db
       .update(habits)
       .set({ deletedAt: null, updatedAt: new Date() })
-      .where(and(isNotNull(habits.deletedAt), eq(habits.id, id)))
+      .where(
+        and(
+          isNotNull(habits.deletedAt),
+          eq(habits.id, id),
+          eq(habits.userId, session.user.id),
+        ),
+      )
       .returning({ id: habits.id, name: habits.name, color: habits.color });
 
     return res
@@ -490,6 +606,7 @@ router.get("/:id/logs", requireAuth, async (req: Request, res: Response) => {
       .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
     if (!habit) {
       res.status(404).json({ error: "Habit not found" });
+      return;
     }
 
     const since = new Date();
@@ -499,7 +616,9 @@ router.get("/:id/logs", requireAuth, async (req: Request, res: Response) => {
     const logs = await db
       .select()
       .from(habitLogs)
-      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+      .where(
+        and(eq(habitLogs.habitId, id), eq(habitLogs.userId, session.user.id)),
+      );
 
     const filtered = logs.filter((log) => log.date >= sinceStr!);
 
@@ -517,19 +636,35 @@ router.post("/streak-engine", async (_req: Request, res: Response) => {
       .status(200)
       .json({ success: true, message: "Streak engine ran successfully" });
   } catch (err) {
-    return res.json(500).json({ error: err });
+    return res.status(500).json({ error: err });
   }
 });
 
 router.get("/:id/history", requireAuth, async (req: Request, res: Response) => {
   try {
+    const session = (req as any).session;
     const { id } = req.params as { id: string };
-    const sixteenWeeksAgo = format(subWeeks(new Date(), 16), "yyyy-mm-dd");
+    const sixteenWeeksAgo = format(subWeeks(new Date(), 16), "yyyy-MM-dd");
+
+    const [habit] = await db
+      .select()
+      .from(habits)
+      .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+
+    if (!habit) {
+      return res.status(404).json({ error: "Habit not found" });
+    }
 
     const logs = await db
       .select()
       .from(habitLogs)
-      .where(and(eq(habitLogs.id, id), gte(habitLogs.date, sixteenWeeksAgo)));
+      .where(
+        and(
+          eq(habitLogs.habitId, id),
+          eq(habitLogs.userId, session.user.id),
+          gte(habitLogs.date, sixteenWeeksAgo),
+        ),
+      );
 
     return res.status(200).json({ message: logs });
   } catch (err) {

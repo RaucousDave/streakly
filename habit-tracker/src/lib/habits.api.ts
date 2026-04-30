@@ -97,10 +97,10 @@ export const habitsApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }).then((r) => r.habits),
-  freeze: (id: string) =>
+  freeze: (id: string, frozen: boolean) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ frozen: true }),
+      body: JSON.stringify({ frozen }),
     }).then((r) => r.habits),
   delete: (id: string) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}`, {
@@ -171,8 +171,6 @@ export function useCheckIn() {
             ? {
                 ...h,
                 done: true,
-                status: "completed",
-                lastCheckedInDate: new Date().toISOString().split("T")[0],
               }
             : h,
         ),
@@ -274,8 +272,9 @@ export function useFreezeHabit() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: habitsApi.freeze,
-    onMutate: async (id) => {
+    mutationFn: ({ id, frozen }: { id: string; frozen: boolean }) =>
+      habitsApi.freeze(id, frozen),
+    onMutate: async ({ id, frozen }) => {
       await queryClient.cancelQueries({ queryKey: habitKeys.all });
       const previousHabits = queryClient.getQueryData<Habit[]>(
         habitKeys.lists(),
@@ -287,7 +286,7 @@ export function useFreezeHabit() {
           h.id === id
             ? {
                 ...h,
-                frozen: true,
+                frozen,
               }
             : h,
         ),
@@ -297,8 +296,10 @@ export function useFreezeHabit() {
         old
           ? {
               ...old,
-              freezes: Math.max(0, old.freezes - 1),
-              freezesUsed: old.freezesUsed + 1,
+              freezes: frozen ? Math.max(0, old.freezes - 1) : old.freezes + 1,
+              freezesUsed: frozen
+                ? old.freezesUsed + 1
+                : Math.max(0, old.freezesUsed - 1),
             }
           : old,
       );

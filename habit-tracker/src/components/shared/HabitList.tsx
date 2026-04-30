@@ -10,7 +10,7 @@ interface HabitListProps {
   freezePending: boolean;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
-  onFreeze: (id: string) => void;
+  onFreeze: (id: string, frozen: boolean) => void;
 }
 
 export function HabitList({

@@ -5,7 +5,7 @@ interface DashboardSummaryProps {
   allDone: boolean;
   completedCount: number;
   totalCount: number;
-  topStreak: number;
+  topStreak: number; 
   totalFreezes: number;
 }
 
@@ -15,7 +15,7 @@ export function DashboardSummary({
   completedCount,
   totalCount,
   topStreak,
-  totalFreezes,
+  totalFreezes, 
 }: DashboardSummaryProps) {
   const firstName = userName?.split(" ")[0] ?? "there";
   const progress =
