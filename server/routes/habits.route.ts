@@ -11,6 +11,7 @@ import { habitLogs, milestones, user } from "../db/schema";
 import { habits } from "../db/schema";
 import { eq, and, isNotNull, gte, inArray, ne, isNull } from "drizzle-orm";
 import { format, subWeeks } from "date-fns";
+import { queueMilestoneNotification } from "../lib/notifications";
 
 const router = Router();
 
@@ -29,6 +30,7 @@ export async function requireAuth(
   (req as any).session = session;
   next();
 }
+
 
 const FREEZE_TIERS = [
   {
@@ -53,6 +55,18 @@ const MILESTONE_THRESHOLDS = [7, 30, 100] as const;
 
 export function getDateKey(date = new Date()) {
   return format(date, "yyyy-MM-dd");
+}
+
+function shiftDateKey(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function diffDays(leftDateKey: string, rightDateKey: string) {
+  const left = new Date(`${leftDateKey}T00:00:00.000Z`);
+  const right = new Date(`${rightDateKey}T00:00:00.000Z`);
+  return Math.floor((left.getTime() - right.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 export async function checkAndWriteMilestone(
@@ -84,6 +98,12 @@ export async function checkAndWriteMilestone(
         streakCount: currentStreak,
       })
       .returning();
+
+    await queueMilestoneNotification({
+      userId,
+      habitId,
+      streakCount: currentStreak,
+    });
   }
 }
 
@@ -142,7 +162,10 @@ export async function freezeResetEngine() {
 }
 
 export async function streakEngine() {
-  const allHabits = await db.select().from(habits).where(isNull(habits.deletedAt));
+  const allHabits = await db
+    .select()
+    .from(habits)
+    .where(isNull(habits.deletedAt));
   const today = getDateKey();
 
   for (const habit of allHabits) {
@@ -150,69 +173,24 @@ export async function streakEngine() {
       continue;
     }
 
-    const completedToday = habit.lastCheckedInDate === today;
+    const createdDateKey = getDateKey(habit.createdAt);
+    const lastProcessedDate =
+      habit.lastProcessedDate ?? shiftDateKey(createdDateKey, -1);
+    const daysToProcess = diffDays(today, lastProcessedDate);
 
-    if (completedToday) {
-      const nextStreak = habit.currentStreak + 1;
-
-      const updatedHabit = await db
-        .update(habits)
-        .set({
-          currentStreak: nextStreak,
-          longestStreak: Math.max(habit.longestStreak, nextStreak),
-          totalCompleted: habit.totalCompleted + 1,
-          lastProcessedDate: today,
-          done: false,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
-        .returning({ id: habits.id });
-
-      if (updatedHabit.length === 0) {
-        continue;
-      }
-
-      const [existingLog] = await db
-        .select()
-        .from(habitLogs)
-        .where(
-          and(
-            eq(habitLogs.habitId, habit.id),
-            eq(habitLogs.userId, habit.userId),
-            eq(habitLogs.date, today),
-          ),
-        )
-        .limit(1);
-
-      if (!existingLog) {
-        await db.insert(habitLogs).values({
-          id: crypto.randomUUID(),
-          userId: habit.userId,
-          habitId: habit.id,
-          date: today as string,
-          status: "completed",
-        });
-      }
-
-      await checkAndWriteMilestone(habit.id, habit.userId, nextStreak);
+    if (daysToProcess <= 0) {
+      continue;
     }
-    else if (habit.frozen) {
-      const updatedHabit = await db
-        .update(habits)
-        .set({
-          done: false,
-          frozen: true,
-          lastProcessedDate: today,
-          totalSkipped: habit.totalSkipped + 1,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
-        .returning({ id: habits.id });
 
-      if (updatedHabit.length === 0) {
-        continue;
-      }
+    let currentStreak = habit.currentStreak;
+    let longestStreak = habit.longestStreak;
+    let totalCompleted = habit.totalCompleted;
+    let totalSkipped = habit.totalSkipped;
+    let totalFailed = habit.totalFailed;
+    let processedThrough = lastProcessedDate;
 
+    for (let offset = 1; offset <= daysToProcess; offset += 1) {
+      const dateKey = shiftDateKey(lastProcessedDate, offset);
       const [existingLog] = await db
         .select()
         .from(habitLogs)
@@ -220,59 +198,56 @@ export async function streakEngine() {
           and(
             eq(habitLogs.habitId, habit.id),
             eq(habitLogs.userId, habit.userId),
-            eq(habitLogs.date, today),
+            eq(habitLogs.date, dateKey),
           ),
         )
         .limit(1);
 
-      if (!existingLog) {
+      let dailyStatus = existingLog?.status;
+
+      if (!dailyStatus) {
+        dailyStatus =
+          dateKey === today && habit.lastCheckedInDate === today
+            ? "completed"
+            : "failed";
+
         await db.insert(habitLogs).values({
           id: crypto.randomUUID(),
           userId: habit.userId,
           habitId: habit.id,
-          date: today as string,
-          status: "skipped",
+          date: dateKey,
+          status: dailyStatus,
         });
       }
-    } else {
-      const updatedHabit = await db
-        .update(habits)
-        .set({
-          done: false,
-          totalFailed: habit.totalFailed + 1,
-          lastProcessedDate: today,
-          currentStreak: 0,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)))
-        .returning({ id: habits.id });
 
-      if (updatedHabit.length === 0) {
-        continue;
+      if (dailyStatus === "completed") {
+        currentStreak += 1;
+        totalCompleted += 1;
+        longestStreak = Math.max(longestStreak, currentStreak);
+        await checkAndWriteMilestone(habit.id, habit.userId, currentStreak);
+      } else if (dailyStatus === "skipped") {
+        totalSkipped += 1;
+      } else {
+        totalFailed += 1;
+        currentStreak = 0;
       }
 
-      const [existingLog] = await db
-        .select()
-        .from(habitLogs)
-        .where(
-          and(
-            eq(habitLogs.habitId, habit.id),
-            eq(habitLogs.userId, habit.userId),
-            eq(habitLogs.date, today),
-          ),
-        )
-        .limit(1);
-
-      if (!existingLog) {
-        await db.insert(habitLogs).values({
-          id: crypto.randomUUID(),
-          userId: habit.userId,
-          habitId: habit.id,
-          date: today as string,
-          status: "failed",
-        });
-      }
+      processedThrough = dateKey;
     }
+
+    await db
+      .update(habits)
+      .set({
+        currentStreak,
+        longestStreak,
+        totalCompleted,
+        totalSkipped,
+        totalFailed,
+        lastProcessedDate: processedThrough,
+        done: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)));
   }
 }
 
@@ -288,9 +263,19 @@ router.get(
         .select()
         .from(habits)
         .where(eq(habits.userId, session.user.id));
+      const todayLogs = await db
+        .select()
+        .from(habitLogs)
+        .where(eq(habitLogs.userId, session.user.id));
+      const skippedTodayHabitIds = new Set(
+        todayLogs
+          .filter((log) => log.date === today && log.status === "skipped")
+          .map((log) => log.habitId),
+      );
 
       const userHabits = rawHabits.map((habit) => ({
         ...habit,
+        frozen: skippedTodayHabitIds.has(habit.id),
         done:
           habit.lastCheckedInDate === today &&
           habit.lastProcessedDate !== today &&
@@ -370,6 +355,17 @@ router.patch(
         .select()
         .from(habits)
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)));
+      const [todayLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, id),
+            eq(habitLogs.userId, session.user.id),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
 
       if (!habit) {
         res.status(404).json({ error: "Habit not found" });
@@ -387,6 +383,12 @@ router.patch(
         });
       }
 
+      if (todayLog?.status === "skipped") {
+        return res.status(400).json({
+          error: "Unfreeze this habit before checking in today",
+        });
+      }
+
       const [updatedHabit] = await db
         .update(habits)
         .set({
@@ -396,6 +398,28 @@ router.patch(
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
         .returning();
+
+      const [existingTodayLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, id),
+            eq(habitLogs.userId, session.user.id),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
+
+      if (!existingTodayLog) {
+        await db.insert(habitLogs).values({
+          id: crypto.randomUUID(),
+          userId: session.user.id,
+          habitId: id,
+          date: today,
+          status: "completed",
+        });
+      }
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
@@ -442,10 +466,50 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
         });
       }
 
+      if (habit.lastCheckedInDate === getDateKey()) {
+        return res.status(400).json({
+          error: "Cannot freeze a habit that is already checked in today",
+        });
+      }
+
+      const today = getDateKey();
+      const [todayLog] = await db
+        .select()
+        .from(habitLogs)
+        .where(
+          and(
+            eq(habitLogs.habitId, id),
+            eq(habitLogs.userId, session.user.id),
+            eq(habitLogs.date, today),
+          ),
+        )
+        .limit(1);
+
+      if (todayLog?.status === "completed") {
+        return res.status(400).json({
+          error: "Cannot freeze a habit that is already completed today",
+        });
+      }
+
+      if (todayLog?.status === "skipped") {
+        return res.status(400).json({
+          error: "Habit is already frozen for today",
+        });
+      }
+
+      if (!todayLog) {
+        await db.insert(habitLogs).values({
+          id: crypto.randomUUID(),
+          userId: session.user.id,
+          habitId: id,
+          date: today,
+          status: "skipped",
+        });
+      }
+
       const [frozenHabit] = await db
         .update(habits)
         .set({
-          frozen: true,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
@@ -462,7 +526,10 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
       return res
         .status(200)
-        .json({ message: "Habit frozen successfully", habit: frozenHabit });
+        .json({
+          message: "Habit frozen successfully",
+          habit: frozenHabit ? { ...frozenHabit, frozen: true } : frozenHabit,
+        });
     }
 
     if (frozen === false) {
@@ -480,15 +547,25 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
           ),
         );
 
+      if (!todayLog) {
+        return res.status(400).json({ error: "Habit is not frozen today" });
+      }
+
       if (todayLog) {
-        return res
-          .status(400)
-          .json({ error: "Freeze token has already been consumed" });
+        await db
+          .delete(habitLogs)
+          .where(
+            and(
+              eq(habitLogs.habitId, id),
+              eq(habitLogs.userId, session.user.id),
+              eq(habitLogs.date, today),
+              eq(habitLogs.status, "skipped"),
+            ),
+          );
       }
       const [unFrozenHabit] = await db
         .update(habits)
         .set({
-          frozen: false,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
@@ -505,7 +582,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
       return res
         .status(200)
-        .json({ message: "Habit unfrozen successfully", habit: unFrozenHabit });
+        .json({
+          message: "Habit unfrozen successfully",
+          habit: unFrozenHabit
+            ? { ...unFrozenHabit, frozen: false }
+            : unFrozenHabit,
+        });
     }
 
     const [updatedHabit] = await db

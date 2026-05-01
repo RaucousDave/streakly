@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth.client";
 import {
   useHabits,
@@ -54,32 +54,52 @@ export default function Dashboard() {
         onSignOut={handleSignOut}
       />
 
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <DashboardSummary
-          userName={session?.user?.name}
-          allDone={allDone}
-          completedCount={completedCount}
-          totalCount={totalCount}
-          topStreak={topStreak}
-          totalFreezes={totalFreezes}
-        />
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0">
+            <DashboardSummary
+              userName={session?.user?.name}
+              allDone={allDone}
+              completedCount={completedCount}
+              totalCount={totalCount}
+              topStreak={topStreak}
+              totalFreezes={totalFreezes}
+            />
 
-        <HabitList
-          habits={habits}
-          user={user}
-          isLoading={isLoading}
-          isError={isError}
-          freezePending={freezeHabit.isPending}
-          onToggle={(id) => checkIn.mutate(id)}
-          onDelete={(id) => deleteHabit.mutate(id)}
-          onFreeze={(id, frozen) => freezeHabit.mutate({ id, frozen })}
-        />
+            {habits.length > 0 && (
+              <div className="mb-4 flex justify-end">
+                <Link
+                  to="/dashboard/progress"
+                  search={{ habitId: habits[0]?.id }}
+                  className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                >
+                  View progress
+                </Link>
+              </div>
+            )}
 
-        <AddHabitButton onClick={() => setShowAdd(true)} />
+            <HabitList
+              habits={habits}
+              user={user}
+              isLoading={isLoading}
+              isError={isError}
+              freezePending={freezeHabit.isPending}
+              onToggle={(id) => checkIn.mutate(id)}
+              onDelete={(id) => deleteHabit.mutate(id)}
+              onFreeze={(id, frozen) => freezeHabit.mutate({ id, frozen })}
+            />
 
-        {!isLoading && habits.length > 0 && (
-          <MilestonePanel habits={habits} loading={false} />
-        )}
+            <AddHabitButton onClick={() => setShowAdd(true)} />
+          </section>
+
+          <aside className="min-w-0">
+            {(isLoading || habits.length > 0) && (
+              <div className="xl:sticky xl:top-20">
+                <MilestonePanel habits={habits} loading={isLoading} />
+              </div>
+            )}
+          </aside>
+        </div>
       </main>
 
       {showAdd && (

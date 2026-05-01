@@ -13,12 +13,35 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   image: text("image"),
   emailVerified: boolean("email_verified").default(false).notNull(),
+  timeZone: text("time_zone").notNull().default("Africa/Lagos"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   freezesUsed: integer("freezes_used").notNull().default(0),
   freezeResetDate: timestamp("freeze_reset_date").default(
     sql`CURRENT_TIMESTAMP`,
   ),
   freezes: integer("freezes").default(2).notNull(),
+  notificationDailyReminders: boolean("notification_daily_reminders")
+    .notNull()
+    .default(true),
+  notificationStreakRisk: boolean("notification_streak_risk")
+    .notNull()
+    .default(true),
+  notificationMilestones: boolean("notification_milestones")
+    .notNull()
+    .default(true),
+  notificationWeeklyRecap: boolean("notification_weekly_recap")
+    .notNull()
+    .default(false),
+  notificationComebackNudges: boolean("notification_comeback_nudges")
+    .notNull()
+    .default(true),
+  notificationFreezeSuggestions: boolean("notification_freeze_suggestions")
+    .notNull()
+    .default(true),
+  reminderWindowStart: text("reminder_window_start").notNull().default("19:00"),
+  reminderWindowEnd: text("reminder_window_end").notNull().default("20:30"),
+  quietHoursStart: text("quiet_hours_start"),
+  quietHoursEnd: text("quiet_hours_end"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -90,7 +113,6 @@ export const habits = pgTable("habits", {
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),
-  frozen: boolean("frozen").default(false).notNull(),
   maximumStreak: integer("maximum_streak").notNull().default(0),
   currentStreak: integer("current_streak").notNull().default(0),
 
@@ -129,6 +151,43 @@ export const milestones = pgTable("milestones", {
   streakCount: integer("streak_count").notNull().default(0),
 });
 
+export const notificationEvents = pgTable("notification_events", {
+  id: text("id").notNull().primaryKey(),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "cascade" })
+    .notNull(),
+  habitId: text("habit_id").references(() => habits.id, {
+    onDelete: "cascade",
+  }),
+  type: text("type", {
+    enum: [
+      "daily_reminder",
+      "streak_risk",
+      "freeze_suggestion",
+      "milestone_earned",
+      "weekly_recap",
+      "comeback_nudge",
+      "low_freeze_warning",
+    ],
+  }).notNull(),
+  priority: text("priority", {
+    enum: ["normal", "high"],
+  }).notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  status: text("status", {
+    enum: ["queued", "sent", "skipped"],
+  })
+    .notNull()
+    .default("queued"),
+  dedupeKey: text("dedupe_key").notNull(),
+  localDateKey: text("local_date_key").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull().defaultNow(),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
 export type Session = typeof session.$inferSelect;
@@ -137,3 +196,4 @@ export type Habits = typeof habits.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
 export type Passkey = typeof passkey.$inferSelect;
 export type HabitLogs = typeof habitLogs.$inferSelect;
+export type NotificationEvent = typeof notificationEvents.$inferSelect;

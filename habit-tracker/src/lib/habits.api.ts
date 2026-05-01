@@ -49,6 +49,20 @@ export interface FreezeHabitPayload {
 export interface HabitLogs {
   status: HabitStatus;
 }
+export interface HabitHistoryEntry {
+  id?: string;
+  status?: HabitStatus;
+  date?: string;
+  day?: string;
+  logDate?: string;
+  entryDate?: string;
+  checkedInAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  done?: boolean;
+  frozen?: boolean;
+}
 export interface HabitStats {
   currentStreak: number;
   longestStreak: number;
@@ -107,9 +121,12 @@ export const habitsApi = {
       method: "DELETE",
     }),
   history: (id: string) =>
-    apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/history`, {
-      method: "GET",
-    }).then((r) => r.habits),
+    apiFetch<{ history?: HabitHistoryEntry[]; habits?: HabitHistoryEntry[] }>(
+      `/api/habits/${id}/history`,
+      {
+        method: "GET",
+      },
+    ).then((r) => r.history ?? r.habits ?? []),
 
   stats: (id: string) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/history`, {
@@ -332,12 +349,7 @@ export function useGetLogs(habitId: string) {
 export function useGetHistory(habitLogsId: string) {
   return useQuery({
     queryKey: [...habitKeys.all, "history", habitLogsId],
-    queryFn: async () => {
-      const data = await habitsApi.history(habitLogsId);
-      if (data === undefined) {
-        return null;
-      }
-    },
+    queryFn: async () => await habitsApi.history(habitLogsId),
     enabled: !!habitLogsId,
   });
 }

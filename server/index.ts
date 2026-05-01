@@ -12,8 +12,10 @@ import habitRouter, {
   freezeResetEngine,
   streakEngine,
 } from "./routes/habits.route";
+import notificationsRouter from "./routes/notifications.route";
 import userRouter from "./routes/user.route";
 import cron from "node-cron";
+import { runNotificationDigestEngine } from "./lib/notifications";
 const app = express();
 
 // Client <-> Server Connection
@@ -41,6 +43,7 @@ app.use((req, res, next) => {
 });
 // 3. your routes
 app.use("/api/habits", habitRouter);
+app.use("/api/notifications", notificationsRouter);
 app.use("/api/user", userRouter);
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -51,11 +54,27 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 cron.schedule("0 23 * * *", async () => {
-  await streakEngine();
+  try {
+    await streakEngine();
+  } catch (error) {
+    console.error("[cron] streakEngine failed", error);
+  }
 });
 
 cron.schedule("0 0 * * 0", async () => {
-  await freezeResetEngine();
+  try {
+    await freezeResetEngine();
+  } catch (error) {
+    console.error("[cron] freezeResetEngine failed", error);
+  }
+});
+
+cron.schedule("0,30 * * * *", async () => {
+  try {
+    await runNotificationDigestEngine();
+  } catch (error) {
+    console.error("[cron] runNotificationDigestEngine failed", error);
+  }
 });
 
 app.listen(3000, () => {
