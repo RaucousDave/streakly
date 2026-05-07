@@ -9,12 +9,10 @@ import { authClient } from "./lib/auth.client";
 import App from "./App";
 import Dashboard from "./pages/Dashboard";
 import HeatmapPage from "./pages/HeatmapPage";
-import SignIn from "./pages/auth/SignIn";
 import SignUp from "./pages/auth/SignUp";
 
 const rootRoute = createRootRoute();
 
-const signInSearchSchema = z.object({ redirect: z.string().optional() });
 const progressSearchSchema = z.object({ habitId: z.string().optional() });
 
 const indexRoute = createRoute({
@@ -33,17 +31,6 @@ const signUpRoute = createRoute({
   },
 });
 
-const signInRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/sign-in",
-  component: SignIn,
-  validateSearch: signInSearchSchema,
-  beforeLoad: async () => {
-    const { data: session } = await authClient.getSession();
-    if (session) throw redirect({ to: "/dashboard" });
-  },
-});
-
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "protected",
@@ -51,7 +38,7 @@ const protectedRoute = createRoute({
     const { data: session } = await authClient.getSession();
     if (!session)
       throw redirect({
-        to: "/sign-in",
+        to: "/sign-up",
         search: { redirect: location.pathname } as any,
       });
     return { session };
@@ -78,15 +65,13 @@ const heatmapRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   signUpRoute,
-  signInRoute,
   protectedRoute.addChildren([dashboardRoute, progressRoute, heatmapRoute]),
 ]);
 
 export const router = createRouter({ routeTree });
 
-
 declare module "@tanstack/react-router" {
-    interface Register{
-        router: typeof router
-    }
+  interface Register {
+    router: typeof router;
+  }
 }

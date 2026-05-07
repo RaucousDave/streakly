@@ -109,7 +109,9 @@ export const habits = pgTable("habits", {
   userId: text("user_id")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
   minimumInput: text("minimum_input").notNull(),
   done: boolean("done").notNull().default(false),
   color: text("color").notNull(),

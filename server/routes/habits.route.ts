@@ -7,14 +7,40 @@ import {
 import { auth } from "../auth/auth";
 import { fromNodeHeaders } from "better-auth/node";
 import { db } from "../db/db";
-import { habitLogs, milestones, user } from "../db/schema";
+import { habitLogs, milestones, user, type HabitLogs } from "../db/schema";
 import { habits } from "../db/schema";
 import { eq, and, isNotNull, gte, inArray, ne, isNull } from "drizzle-orm";
-import { format, subWeeks } from "date-fns";
+import { format, getDate, subWeeks } from "date-fns";
 import { queueMilestoneNotification } from "../lib/notifications";
 
 const router = Router();
 
+interface Habit {
+  id: string;
+  name: string;
+  userId: string;
+  minimumInput: string;
+  done: boolean;
+  color: string;
+  maximumStreak: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalCompleted: number;
+  totalSkipped: number;
+  totalFailed: number;
+  lastCheckedInDate: string;
+  createdAt: Date;
+  lastProcessedDate: string;
+}
+
+interface HabitLog {
+  id: string;
+  userId: string;
+  habitId: string;
+  date: string;
+  createdAt: Date;
+  status: string;
+}
 export async function requireAuth(
   req: Request,
   res: Response,
@@ -30,7 +56,6 @@ export async function requireAuth(
   (req as any).session = session;
   next();
 }
-
 
 const FREEZE_TIERS = [
   {
@@ -159,6 +184,56 @@ export async function freezeResetEngine() {
       })
       .where(eq(user.id, userId));
   }
+}
+
+export async function reconcileMissingLogs(
+  habit: Habit,
+  today: string,
+): Promise<HabitLog[]> {
+  const createdDateKey = getDateKey(habit.createdAt);
+  const lastProcessedDate =
+    habit.lastProcessedDate ?? shiftDateKey(createdDateKey, -1);
+  const daysToProcess = diffDays(lastProcessedDate, createdDateKey);
+
+  if (daysToProcess <= 0) return [];
+
+  const logs: HabitLog[] = [];
+
+  for (let offset = 1; offset <= daysToProcess; offset++) {
+    const dateKey = shiftDateKey(lastProcessedDate, offset);
+
+    const [existingLog] = await db
+      .select()
+      .from(habitLogs)
+      .where(
+        and(
+          eq(habitLogs.habitId, habit.id),
+          eq(habitLogs.userId, habit.userId),
+          eq(habitLogs.date, dateKey),
+        ),
+      );
+
+    if (existingLog) {
+      logs.push(existingLog);
+      continue;
+    }
+    const status = (
+      habit.lastCheckedInDate === today ? "completed" : "failed"
+    ) as "completed" | "failed";
+
+    const newLog: HabitLog = {
+      id: crypto.randomUUID(),
+      date: dateKey,
+      status,
+      userId: habit.userId,
+      habitId: habit.id,
+      createdAt: new Date(),
+    };
+    await db.insert(habitLogs).values(newLog);
+    logs.push(newLog);
+  }
+
+  return logs;
 }
 
 export async function streakEngine() {
@@ -367,6 +442,17 @@ router.patch(
         )
         .limit(1);
 
+        console.log("DEBUG =>", {
+          id,
+          userId: session.user.id,
+          today,
+          habit: habit ?? "NOT FOUND",
+          todayLog: todayLog ?? "NO LOG",
+          lastCheckedInDate: habit?.lastCheckedInDate,
+          lastProcessedDate: habit?.lastProcessedDate,
+        });
+        
+
       if (!habit) {
         res.status(404).json({ error: "Habit not found" });
         return;
@@ -393,25 +479,14 @@ router.patch(
         .update(habits)
         .set({
           done: true,
+          currentStreak: habit.currentStreak + 1,
           lastCheckedInDate: today,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
         .returning();
 
-      const [existingTodayLog] = await db
-        .select()
-        .from(habitLogs)
-        .where(
-          and(
-            eq(habitLogs.habitId, id),
-            eq(habitLogs.userId, session.user.id),
-            eq(habitLogs.date, today),
-          ),
-        )
-        .limit(1);
-
-      if (!existingTodayLog) {
+      if (!todayLog) {
         await db.insert(habitLogs).values({
           id: crypto.randomUUID(),
           userId: session.user.id,
@@ -420,6 +495,10 @@ router.patch(
           status: "completed",
         });
       }
+      else if(todayLog.status !== "completed"){
+        await db.update(habitLogs).set({status: "completed"}).where(habitLogs.id, todayLogs.id)
+      }
+
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
@@ -524,12 +603,10 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
         .where(eq(user.id, session.user.id))
         .returning();
 
-      return res
-        .status(200)
-        .json({
-          message: "Habit frozen successfully",
-          habit: frozenHabit ? { ...frozenHabit, frozen: true } : frozenHabit,
-        });
+      return res.status(200).json({
+        message: "Habit frozen successfully",
+        habit: frozenHabit ? { ...frozenHabit, frozen: true } : frozenHabit,
+      });
     }
 
     if (frozen === false) {
@@ -580,14 +657,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
         .where(eq(user.id, session.user.id))
         .returning();
 
-      return res
-        .status(200)
-        .json({
-          message: "Habit unfrozen successfully",
-          habit: unFrozenHabit
-            ? { ...unFrozenHabit, frozen: false }
-            : unFrozenHabit,
-        });
+      return res.status(200).json({
+        message: "Habit unfrozen successfully",
+        habit: unFrozenHabit
+          ? { ...unFrozenHabit, frozen: false }
+          : unFrozenHabit,
+      });
     }
 
     const [updatedHabit] = await db
