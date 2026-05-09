@@ -3,36 +3,21 @@ import { Check, Flame, Pencil, RotateCcw, Snowflake, Trash2, X } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  type Habit,
-  type User,
-  useRestore,
-  useUpdateHabit,
-} from "@/lib/habits.api";
+import { type Habit, useRestore, useUpdateHabit } from "@/lib/habits.api";
 import {
   COLORS,
   COLOR_MAP,
   fallbackColor,
   type HabitColor,
 } from "@/components/shared/dashboardShared";
+import { useHabitContext } from "@/hooks/HabitContext";
 
 interface HabitCardProps {
   habit: Habit;
-  user?: User;
-  onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
-  onFreeze: (id: string, frozen: boolean) => void;
-  freezePending: boolean;
 }
 
-export function HabitCard({
-  habit,
-  user,
-  onToggle,
-  onDelete,
-  onFreeze,
-  freezePending,
-}: HabitCardProps) {
+export function HabitCard({ habit }: HabitCardProps) {
+  const { user, onToggle, onDelete, onFreeze, freezePending } = useHabitContext();
   const [burst, setBurst] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);

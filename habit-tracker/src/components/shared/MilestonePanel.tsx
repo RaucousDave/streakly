@@ -1,15 +1,11 @@
 import { ArrowUpRight, Star, Trophy } from "lucide-react";
-import type { Habit } from "@/lib/habits.api";
 import {
   buildAggregatedStatsFromHabits,
   MILESTONE_DEFS,
   TIER_STYLES,
 } from "@/components/shared/dashboardShared";
-
-interface MilestonePanelProps {
-  habits: Habit[];
-  loading: boolean;
-}
+import type { Habit } from "@/lib/habits.api";
+import { useHabitContext } from "@/hooks/HabitContext";
 
 type MilestoneProgress = {
   id: string;
@@ -103,7 +99,8 @@ function buildMilestoneProgress(habits: Habit[]): MilestoneProgress[] {
   ];
 }
 
-export function MilestonePanel({ habits, loading }: MilestonePanelProps) {
+export function MilestonePanel() {
+  const { habits, isLoading: loading } = useHabitContext();
   const aggregated = buildAggregatedStatsFromHabits(habits);
   const earnedCount = MILESTONE_DEFS.filter((milestone) =>
     milestone.earned(aggregated),

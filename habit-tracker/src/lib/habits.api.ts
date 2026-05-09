@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
- 
+
 type HabitStatus = "completed" | "skipped" | "failed";
 export interface Habit {
   id: string;
@@ -94,7 +94,6 @@ export const habitsApi = {
 
   getAll: () =>
     apiFetch<{ habits: Habit[] }>("/api/habits").then((r) => r.habits),
-
   create: (payload: CreateHabitPayload) =>
     apiFetch<{ habits: Habit[] }>("/api/habits", {
       method: "POST",

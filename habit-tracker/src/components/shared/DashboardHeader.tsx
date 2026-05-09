@@ -1,16 +1,21 @@
 import { Link } from "@tanstack/react-router";
 import { Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useOptionalHabitContext } from "@/hooks/HabitContext";
 
 interface DashboardHeaderProps {
   userLabel?: string | null;
-  onSignOut: () => void | Promise<void>;
+  onSignOut?: () => void | Promise<void>;
 }
 
 export function DashboardHeader({
   userLabel,
   onSignOut,
 }: DashboardHeaderProps) {
+  const context = useOptionalHabitContext();
+  const resolvedUserLabel = userLabel ?? context?.userLabel;
+  const resolvedOnSignOut = onSignOut ?? context?.onSignOut;
+
   return (
     <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-40">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -19,11 +24,11 @@ export function DashboardHeader({
           <span className="font-bold text-zinc-100 tracking-tight">Streakly</span>
         </Link>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-zinc-500 hidden sm:block">{userLabel}</span>
+          <span className="text-sm text-zinc-500 hidden sm:block">{resolvedUserLabel}</span>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onSignOut}
+            onClick={resolvedOnSignOut}
             className="text-zinc-500 hover:text-zinc-700 hover:bg-neutral-100 text-sm"
           >
             Sign out

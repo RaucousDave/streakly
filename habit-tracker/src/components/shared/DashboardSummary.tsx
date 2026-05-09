@@ -1,22 +1,16 @@
 import { formatToday, getGreeting } from "@/components/shared/dashboardShared";
+import { useHabitContext } from "@/hooks/HabitContext";
 
-interface DashboardSummaryProps {
-  userName?: string | null;
-  allDone: boolean;
-  completedCount: number;
-  totalCount: number;
-  topStreak: number; 
-  totalFreezes: number;
-}
+export function DashboardSummary() {
+  const {
+    userName,
+    allDone,
+    completedCount,
+    totalCount,
+    topStreak,
+    totalFreezes,
+  } = useHabitContext();
 
-export function DashboardSummary({
-  userName,
-  allDone,
-  completedCount,
-  totalCount,
-  topStreak,
-  totalFreezes, 
-}: DashboardSummaryProps) {
   const firstName = userName?.split(" ")[0] ?? "there";
   const progress =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;

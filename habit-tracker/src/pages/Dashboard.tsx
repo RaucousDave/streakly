@@ -1,3 +1,4 @@
+"use client";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth.client";
@@ -19,7 +20,20 @@ import {
 } from "@/components/shared/dashboardShared";
 import { HabitList } from "@/components/shared/HabitList";
 import { MilestonePanel } from "@/components/shared/MilestonePanel";
+import {
+  HabitProvider,
+  type HabitContextType,
+  type HabitStatus,
+} from "@/hooks/HabitContext";
 
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 export default function Dashboard() {
   const navigate = useNavigate();
   const { data: session } = authClient.useSession();
@@ -35,7 +49,9 @@ export default function Dashboard() {
   const completedCount = habits.filter((habit) => habit.done).length;
   const totalCount = habits.length;
   const topStreak =
-    habits.length > 0 ? Math.max(...habits.map((habit) => habit.currentStreak)) : 0;
+    habits.length > 0
+      ? Math.max(...habits.map((habit) => habit.currentStreak))
+      : 0;
   const totalFreezes = user?.freezes ?? 0;
   const allDone = totalCount > 0 && completedCount === totalCount;
 
@@ -47,68 +63,95 @@ export default function Dashboard() {
     () => navigate({ to: "/" }),
   );
 
+  const [habitFilters, setHabitFilters] = useState<HabitStatus>("All");
+
+  const filters: HabitStatus[] = ["All", "Done", "Unchecked"];
+
+  const contextValue: HabitContextType = {
+    status: habitFilters,
+    setStatus: setHabitFilters,
+    showAdd,
+    setShowAdd,
+    habits,
+    user,
+    isLoading,
+    isError,
+    freezePending: freezeHabit.isPending,
+    addHabitLoading: createHabit.isPending,
+    userLabel: session?.user?.name ?? session?.user?.email,
+    userName: session?.user?.name,
+    allDone,
+    completedCount,
+    totalCount,
+    topStreak,
+    totalFreezes,
+    onToggle: (id: string) => checkIn.mutate(id),
+    onDelete: (id: string) => deleteHabit.mutate(id),
+    onFreeze: (id: string, frozen: boolean) =>
+      freezeHabit.mutate({ id, frozen }),
+    onAdd: handleAdd,
+    onSignOut: handleSignOut,
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <DashboardHeader
-        userLabel={session?.user?.name ?? session?.user?.email}
-        onSignOut={handleSignOut}
-      />
+    <HabitProvider value={contextValue}>
+      <div className="min-h-screen bg-zinc-950">
+        <DashboardHeader />
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="min-w-0">
-            <DashboardSummary
-              userName={session?.user?.name}
-              allDone={allDone}
-              completedCount={completedCount}
-              totalCount={totalCount}
-              topStreak={topStreak}
-              totalFreezes={totalFreezes}
-            />
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="min-w-0">
+              <DashboardSummary />
 
-            {habits.length > 0 && (
-              <div className="mb-4 flex justify-end">
-                <Link
-                  to="/dashboard/progress"
-                  search={{ habitId: habits[0]?.id }}
-                  className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
-                >
-                  View progress
-                </Link>
-              </div>
-            )}
+              {habits.length > 0 && (
+                <div className="mb-4 flex justify-between">
+                  <Combobox
+                    value={habitFilters}
+                    onValueChange={(value) => setHabitFilters(value as HabitStatus)}
+                    items={filters}
+                  >
+                    <ComboboxInput
+                      className="text-white"
+                      placeholder="Filter habits"
+                    />
+                    <ComboboxContent>
+                      <ComboboxEmpty>No items found.</ComboboxEmpty>
+                      <ComboboxList className="bg-neutral-900 text-white">
+                        {(item: HabitStatus) => (
+                          <ComboboxItem key={item} value={item}>
+                            {item}
+                          </ComboboxItem>
+                        )}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                  <Link
+                    to="/dashboard/progress"
+                    search={{ habitId: habits[0]?.id }}
+                    className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                  >
+                    View progress
+                  </Link>
+                </div>
+              )}
 
-            <HabitList
-              habits={habits}
-              user={user}
-              isLoading={isLoading}
-              isError={isError}
-              freezePending={freezeHabit.isPending}
-              onToggle={(id) => checkIn.mutate(id)}
-              onDelete={(id) => deleteHabit.mutate(id)}
-              onFreeze={(id, frozen) => freezeHabit.mutate({ id, frozen })}
-            />
+              <HabitList />
 
-            <AddHabitButton onClick={() => setShowAdd(true)} />
-          </section>
+              <AddHabitButton />
+            </section>
 
-          <aside className="min-w-0">
-            {(isLoading || habits.length > 0) && (
-              <div className="xl:sticky xl:top-20">
-                <MilestonePanel habits={habits} loading={isLoading} />
-              </div>
-            )}
-          </aside>
-        </div>
-      </main>
+            <aside className="min-w-0">
+              {(isLoading || habits.length > 0) && (
+                <div className="xl:sticky xl:top-20">
+                  <MilestonePanel />
+                </div>
+              )}
+            </aside>
+          </div>
+        </main>
 
-      {showAdd && (
-        <AddHabitModal
-          onClose={() => setShowAdd(false)}
-          onAdd={handleAdd}
-          loading={createHabit.isPending}
-        />
-      )}
-    </div>
+        {showAdd && <AddHabitModal />}
+      </div>
+    </HabitProvider>
   );
 }

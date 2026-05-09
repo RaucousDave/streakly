@@ -4,20 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import type { CreateHabitPayload } from "@/lib/habits.api";
 import { COLORS, COLOR_MAP, type HabitColor } from "@/components/shared/dashboardShared";
+import { useHabitContext } from "@/hooks/HabitContext";
 
-interface AddHabitModalProps {
-  onClose: () => void;
-  onAdd: (payload: CreateHabitPayload) => void;
-  loading: boolean;
-}
-
-export function AddHabitModal({
-  onClose,
-  onAdd,
-  loading,
-}: AddHabitModalProps) {
+export function AddHabitModal() {
+  const { setShowAdd, onAdd, addHabitLoading } = useHabitContext();
   const [name, setName] = useState("");
   const [minimumInput, setMinimumInput] = useState("");
   const [color, setColor] = useState<HabitColor>("emerald");
@@ -40,7 +31,7 @@ export function AddHabitModal({
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-bold text-zinc-100">New habit</h2>
             <button
-              onClick={onClose}
+              onClick={() => setShowAdd(false)}
               className="text-zinc-600 hover:text-zinc-400 transition-colors"
               aria-label="Close add habit modal"
             >
@@ -98,18 +89,18 @@ export function AddHabitModal({
               <Button
                 type="button"
                 variant="outline"
-                onClick={onClose}
+                onClick={() => setShowAdd(false)}
                 className="flex-1 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-full"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={addHabitLoading}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full"
               >
-                {loading ? "Adding..." : "Add habit"}
-                {!loading && <ArrowRight className="w-4 h-4" aria-hidden="true" />}
+                {addHabitLoading ? "Adding..." : "Add habit"}
+                {!addHabitLoading && <ArrowRight className="w-4 h-4" aria-hidden="true" />}
               </Button>
             </div>
           </form>
