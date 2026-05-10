@@ -49,6 +49,12 @@ export interface FreezeHabitPayload {
 export interface HabitLogs {
   status: HabitStatus;
 }
+export interface HabitCompletionRate {
+  habitId: string;
+  completed: number;
+  totalLogs: number;
+  completionRate: number;
+}
 export interface HabitHistoryEntry {
   id?: string;
   status?: HabitStatus;
@@ -126,6 +132,14 @@ export const habitsApi = {
         method: "GET",
       },
     ).then((r) => r.history ?? r.habits ?? []),
+  completionRate: (id: string) =>
+    apiFetch<{
+      rate?: HabitCompletionRate;
+      completionRate?: HabitCompletionRate;
+      data?: HabitCompletionRate;
+    }>(`/api/habits/${id}/completionRate`, {
+      method: "GET",
+    }).then((r) => r.rate ?? r.completionRate ?? r.data),
 
   stats: (id: string) =>
     apiFetch<{ habits: Habit[] }>(`/api/habits/${id}/history`, {
@@ -350,5 +364,13 @@ export function useGetHistory(habitLogsId: string) {
     queryKey: [...habitKeys.all, "history", habitLogsId],
     queryFn: async () => await habitsApi.history(habitLogsId),
     enabled: !!habitLogsId,
+  });
+}
+
+export function useGetCompletionRate(habitId: string) {
+  return useQuery({
+    queryKey: [...habitKeys.all, "completion-rate", habitId],
+    queryFn: async () => await habitsApi.completionRate(habitId),
+    enabled: !!habitId,
   });
 }

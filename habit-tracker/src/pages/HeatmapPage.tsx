@@ -6,6 +6,7 @@ import { CompletionChart } from "@/components/shared/CompletionChart";
 import { DashboardHeader } from "@/components/shared/DashboardHeader";
 import { Heatmap } from "@/components/shared/Heatmap";
 import {
+  useGetCompletionRate,
   useGetHistory,
   useGetLogs,
   useHabits,
@@ -23,6 +24,9 @@ export default function HeatmapPage() {
 
   const logsQuery = useGetLogs(selectedHabit?.id ?? "");
   const historyQuery = useGetHistory(selectedHabit?.id ?? "");
+  const completionRateQuery = useGetCompletionRate(selectedHabit?.id ?? "");
+  const completionRate =
+    completionRateQuery.data?.completionRate ?? selectedHabit?.completionRate ?? 0;
 
   useEffect(() => {
     if (!search.habitId && habits[0]?.id) {
@@ -126,13 +130,15 @@ export default function HeatmapPage() {
                   </div>
                   <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Completion rate</p>
-                    <p className="mt-1 text-xl font-semibold text-zinc-100">{selectedHabit.completionRate}%</p>
+                    <p className="mt-1 text-xl font-semibold text-zinc-100">{completionRate}%</p>
                   </div>
                 </div>
               </div>
               <CompletionChart
                 habit={selectedHabit}
                 history={historyQuery.data}
+                completionRate={completionRateQuery.data}
+                completionRateLoading={completionRateQuery.isLoading}
                 loading={historyQuery.isLoading}
                 error={historyQuery.isError}
               />

@@ -186,56 +186,6 @@ export async function freezeResetEngine() {
   }
 }
 
-export async function reconcileMissingLogs(
-  habit: Habit,
-  today: string,
-): Promise<HabitLog[]> {
-  const createdDateKey = getDateKey(habit.createdAt);
-  const lastProcessedDate =
-    habit.lastProcessedDate ?? shiftDateKey(createdDateKey, -1);
-  const daysToProcess = diffDays(lastProcessedDate, createdDateKey);
-
-  if (daysToProcess <= 0) return [];
-
-  const logs: HabitLog[] = [];
-
-  for (let offset = 1; offset <= daysToProcess; offset++) {
-    const dateKey = shiftDateKey(lastProcessedDate, offset);
-
-    const [existingLog] = await db
-      .select()
-      .from(habitLogs)
-      .where(
-        and(
-          eq(habitLogs.habitId, habit.id),
-          eq(habitLogs.userId, habit.userId),
-          eq(habitLogs.date, dateKey),
-        ),
-      );
-
-    if (existingLog) {
-      logs.push(existingLog);
-      continue;
-    }
-    const status = (
-      habit.lastCheckedInDate === today ? "completed" : "failed"
-    ) as "completed" | "failed";
-
-    const newLog: HabitLog = {
-      id: crypto.randomUUID(),
-      date: dateKey,
-      status,
-      userId: habit.userId,
-      habitId: habit.id,
-      createdAt: new Date(),
-    };
-    await db.insert(habitLogs).values(newLog);
-    logs.push(newLog);
-  }
-
-  return logs;
-}
-
 export async function streakEngine() {
   const allHabits = await db
     .select()
@@ -322,7 +272,7 @@ export async function streakEngine() {
         done: false,
         updatedAt: new Date(),
       })
-      .where(and(eq(habits.id, habit.id), ne(habits.lastProcessedDate, today)));
+      .where(eq(habits.id, habit.id));
   }
 }
 
@@ -351,15 +301,57 @@ router.get(
       const userHabits = rawHabits.map((habit) => ({
         ...habit,
         frozen: skippedTodayHabitIds.has(habit.id),
-        done:
-          habit.lastCheckedInDate === today &&
-          habit.lastProcessedDate !== today &&
-          !habit.deletedAt,
+        done: habit.lastCheckedInDate === today && !habit.deletedAt,
       }));
 
       res.status(200).json({ habits: userHabits });
     } catch (error) {
       res.status(401).json({ message: "Something went wrong", error });
+    }
+  },
+);
+
+router.get(
+  "/:id/completionRate",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const habitId = req.params.id as string;
+
+      const [existingHabit] = await db
+        .select()
+        .from(habits)
+        .where(eq(habits.id, habitId));
+
+      if (!existingHabit) {
+        return res.status(404).json({ error: "Habit does not exist" });
+      }
+
+      // fetch all the habit logs for a specific habit
+      const logs = await db
+        .select()
+        .from(habitLogs)
+        .where(eq(habitLogs.habitId, habitId));
+
+      // calculate the statistics
+
+      const completed = logs.filter((log) => log.status === "completed").length;
+      const relevantLogs = logs.filter(
+        (log) => log.status !== "skipped",
+      ).length;
+
+      const completionRate =
+        relevantLogs > 0 ? Math.round((completed / relevantLogs) * 100) : 0;
+
+      return res.status(200).json({
+        completionRate: {
+          completed,
+          totalLogs: relevantLogs,
+          completionRate: completionRate,
+        },
+      });
+    } catch (err) {
+      return res.status(400).json({ error: "Something went wrong", err });
     }
   },
 );
@@ -399,7 +391,7 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const session = (req as any).session;
-      const today = getDateKey();
+      const today = getDateKey(); //gets today's date as a strubg
 
       const rawId = req.params.id;
 
@@ -426,6 +418,7 @@ router.patch(
         });
       }
 
+      // get habit that user wants to mark as done along with the respective log
       const [habit] = await db
         .select()
         .from(habits)
@@ -442,16 +435,15 @@ router.patch(
         )
         .limit(1);
 
-        console.log("DEBUG =>", {
-          id,
-          userId: session.user.id,
-          today,
-          habit: habit ?? "NOT FOUND",
-          todayLog: todayLog ?? "NO LOG",
-          lastCheckedInDate: habit?.lastCheckedInDate,
-          lastProcessedDate: habit?.lastProcessedDate,
-        });
-        
+      console.log("DEBUG =>", {
+        id,
+        userId: session.user.id,
+        today,
+        habit: habit ?? "NOT FOUND",
+        todayLog: todayLog ?? "NO LOG",
+        lastCheckedInDate: habit?.lastCheckedInDate,
+        lastProcessedDate: habit?.lastProcessedDate,
+      });
 
       if (!habit) {
         res.status(404).json({ error: "Habit not found" });
@@ -475,16 +467,27 @@ router.patch(
         });
       }
 
+      const nextCurrentStreak = habit.currentStreak + 1;
+      const nextLongestStreak = Math.max(
+        habit.longestStreak,
+        nextCurrentStreak,
+      );
+
       const [updatedHabit] = await db
         .update(habits)
         .set({
           done: true,
-          currentStreak: habit.currentStreak + 1,
+          currentStreak: nextCurrentStreak,
+          longestStreak: nextLongestStreak,
+          totalCompleted: habit.totalCompleted + 1,
           lastCheckedInDate: today,
+          lastProcessedDate: today,
           updatedAt: new Date(),
         })
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
         .returning();
+
+      await checkAndWriteMilestone(id, session.user.id, nextCurrentStreak);
 
       if (!todayLog) {
         await db.insert(habitLogs).values({
@@ -494,11 +497,12 @@ router.patch(
           date: today,
           status: "completed",
         });
+      } else if (todayLog.status !== "completed") {
+        await db
+          .update(habitLogs)
+          .set({ status: "completed" })
+          .where(eq(habitLogs.id, todayLog.id));
       }
-      else if(todayLog.status !== "completed"){
-        await db.update(habitLogs).set({status: "completed"}).where(habitLogs.id, todayLogs.id)
-      }
-
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {

@@ -20,6 +20,7 @@ export const user = pgTable("user", {
     sql`CURRENT_TIMESTAMP`,
   ),
   freezes: integer("freezes").default(2).notNull(),
+  // completionRate: integer("completion_rate").notNull().default(0),
   notificationDailyReminders: boolean("notification_daily_reminders")
     .notNull()
     .default(true),

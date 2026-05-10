@@ -1,4 +1,8 @@
-import type { Habit, HabitHistoryEntry } from "@/lib/habits.api";
+import type {
+  Habit,
+  HabitCompletionRate,
+  HabitHistoryEntry,
+} from "@/lib/habits.api";
 import { COLOR_MAP, fallbackColor } from "@/components/shared/dashboardShared";
 import {
   extractIsoDate,
@@ -19,6 +23,8 @@ import {
 interface CompletionChartProps {
   habit: Habit;
   history?: HabitHistoryEntry[];
+  completionRate?: HabitCompletionRate;
+  completionRateLoading?: boolean;
   loading?: boolean;
   error?: boolean;
 }
@@ -83,12 +89,15 @@ function getChartColor(color: string) {
 export function CompletionChart({
   habit,
   history,
+  completionRate,
+  completionRateLoading,
   loading,
   error,
 }: CompletionChartProps) {
   const colors = COLOR_MAP[habit.color] ?? fallbackColor;
   const data = buildChartData(history);
   const chartColor = getChartColor(habit.color);
+  const resolvedCompletionRate = completionRate?.completionRate ?? habit.completionRate;
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/90 p-4 sm:p-5">
@@ -103,7 +112,7 @@ export function CompletionChart({
           </p>
         </div>
         <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-400">
-          {habit.completionRate}% all-time
+          {completionRateLoading ? "Updating..." : `${resolvedCompletionRate}% all-time`}
         </div>
       </div>
 
