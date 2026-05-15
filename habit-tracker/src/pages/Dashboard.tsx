@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth.client";
 import {
   useHabits,
@@ -107,7 +107,9 @@ export default function Dashboard() {
                 <div className="mb-4 flex justify-between">
                   <Combobox
                     value={habitFilters}
-                    onValueChange={(value) => setHabitFilters(value as HabitStatus)}
+                    onValueChange={(value) =>
+                      setHabitFilters(value as HabitStatus)
+                    }
                     items={filters}
                   >
                     <ComboboxInput
@@ -125,13 +127,6 @@ export default function Dashboard() {
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
-                  <Link
-                    to="/dashboard/progress"
-                    search={{ habitId: habits[0]?.id }}
-                    className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
-                  >
-                    View progress
-                  </Link>
                 </div>
               )}
 

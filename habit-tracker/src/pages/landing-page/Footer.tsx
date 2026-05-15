@@ -9,17 +9,6 @@ export default function Footer() {
           <span className="font-semibold text-zinc-300">Streakly</span>
         </div>
         <p>© {new Date().getFullYear()} Streakly. Built with discipline.</p>
-        <div className="flex gap-5">
-          <a href="#" className="hover:text-zinc-700 transition-colors">
-            Privacy
-          </a>
-          <a href="#" className="hover:text-zinc-700 transition-colors">
-            Terms
-          </a>
-          <a href="#" className="hover:text-zinc-700 transition-colors">
-            Contact
-          </a>
-        </div>
       </div>
     </footer>
   );

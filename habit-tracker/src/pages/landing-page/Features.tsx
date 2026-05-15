@@ -21,13 +21,7 @@ export default function Features() {
               className=" hover:shadow-sm transition-all duration-200 bg-neutral-800"
             >
               <CardContent className="p-6">
-                <span
-                  className="text-2xl mb-4 block"
-                  role="img"
-                  aria-label={f.title}
-                >
-                  {f.icon}
-                </span>
+                <f.icon className="mb-4 h-8 w-8 text-emerald-400" aria-hidden="true" />
                 <h3 className="font-semibold text-zinc-100 text-xl mb-2">{f.title}</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">
                   {f.desc}

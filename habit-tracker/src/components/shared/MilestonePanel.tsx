@@ -204,7 +204,7 @@ export function MilestonePanel() {
         )}
       </div>
 
-      <div className="max-h-[calc(100vh-10rem)] overflow-y-auto pr-1">
+      <div className="no-scrollbar max-h-[calc(100vh-10rem)] overflow-y-auto pr-1">
         {!loading && earnedMilestones.length > 0 && (
           <div className="mb-4">
           <div className="mb-2 flex items-center gap-2">

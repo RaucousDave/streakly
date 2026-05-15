@@ -1,63 +1,27 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { Flame, Snowflake, Target } from "lucide-react";
 import Hero from "./pages/landing-page/Hero";
-import { Flame } from "lucide-react";
 import How from "./pages/landing-page/How";
 import Features from "./pages/landing-page/Features";
 import Cta from "./pages/landing-page/Cta";
 import Footer from "./pages/landing-page/Footer";
-import { Link } from "@tanstack/react-router";
-
-export function SnowflakeIcon({ className = "" }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
-// ── Feature cards ──────────────────────────────────────────────────────────
 
 export const FEATURES = [
   {
-    icon: "🎯",
+    icon: Target,
     title: "Minimum viable habit",
-    desc: "Set the smallest possible action you'll commit to. On bad days, just do the minimum — the streak lives.",
+    desc: "Set the smallest possible action you'll commit to. On bad days, just do the minimum - the streak lives.",
   },
   {
-    icon: "🔥",
+    icon: Flame,
     title: "Streak tracking",
     desc: "Every consecutive day adds to your streak. Hit milestones at 7, 30, and 100 days.",
   },
   {
-    icon: "❄️",
+    icon: Snowflake,
     title: "Grace freezes",
     desc: "Life happens. Use a weekly freeze to protect your streak without losing momentum.",
-  },
-  {
-    icon: "📅",
-    title: "Calendar heatmap",
-    desc: "See your full history at a glance — a GitHub-style grid of hits and misses per habit.",
-  },
-  {
-    icon: "📈",
-    title: "Completion charts",
-    desc: "Track your completion rate over time and see the long-term arc of your consistency.",
-  },
-  {
-    icon: "🔔",
-    title: "Smart reminders",
-    desc: "Daily nudges at your preferred time, plus freeze warnings before your streak is at risk.",
   },
 ];
 
@@ -65,7 +29,7 @@ export const STEPS = [
   {
     number: "01",
     title: "Add your habit",
-    desc: 'Name the habit and set your minimum — the least you can do and still count the day. E.g. "Exercise daily → 2 rounds of push-ups".',
+    desc: 'Name the habit and set your minimum - the least you can do and still count the day. E.g. "Exercise daily -> 2 rounds of push-ups".',
   },
   {
     number: "02",
@@ -100,8 +64,6 @@ export const TESTIMONIALS = [
   },
 ];
 
-// ── Main landing page ──────────────────────────────────────────────────────
-
 export default function App() {
   const [navScrolled, setNavScrolled] = useState(false);
 
@@ -130,7 +92,6 @@ export default function App() {
         }
       `}</style>
 
-      {/* ── Nav ── */}
       <header
         className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
           navScrolled
@@ -138,29 +99,28 @@ export default function App() {
             : "bg-transparent"
         }`}
       >
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-emerald-500" />
-            <span className="font-bold text-neutral-100 tracking-tight text-lg">
+            <Flame className="h-5 w-5 text-emerald-500" />
+            <span className="text-lg font-bold tracking-tight text-neutral-100">
               Streakly
             </span>
           </div>
-          <nav className="hidden sm:flex items-center gap-6 text-sm text-zinc-200">
-            <a href="#how" className="hover:text-emerald-500 transition-colors">
+          <nav className="hidden items-center gap-6 text-sm text-zinc-200 sm:flex">
+            <a href="#how" className="transition-colors hover:text-emerald-500">
               How it works
             </a>
             <a
               href="#features"
-              className="hover:text-emerald-500 transition-colors"
+              className="transition-colors hover:text-emerald-500"
             >
               Features
-          </a>
+            </a>
           </nav>
           <div className="flex items-center gap-3">
-            
             <Link
               to="/sign-up"
-              className="text-zinc-100 bg-emerald-500 transition-all ease-linear px-4 py-1 rounded-lg hover:bg-zinc-100 hover:text-zinc-900"
+              className="rounded-lg bg-emerald-500 px-4 py-1 text-zinc-100 transition-all ease-linear hover:bg-zinc-100 hover:text-zinc-900"
             >
               Get started free
             </Link>
@@ -169,17 +129,12 @@ export default function App() {
       </header>
 
       <main>
-        {/* ── Hero ── */}
         <Hero />
-        {/* ── How it works ── */}
         <How />
-        {/* ── Features ── */}
         <Features />
-        {/* ── Final CTA ── */}
         <Cta />
       </main>
 
-      {/* ── Footer ── */}
       <Footer />
     </div>
   );

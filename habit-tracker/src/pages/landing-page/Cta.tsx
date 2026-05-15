@@ -1,5 +1,6 @@
 import { Flame, Snowflake } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 export default function Cta() {
   return (
     <section className="py-28 px-6">
@@ -15,10 +16,11 @@ export default function Cta() {
           Free forever!
         </p>
         <Button
+          asChild
           size="lg"
           className="bg-zinc-100 hover:bg-emerald-500 hover:text-white text-zinc-900 rounded-full px-10 h-13 text-base font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-md"
         >
-          Get started free →
+          <Link to="/sign-up">Get started free →</Link>
         </Button>
       </div>
     </section>
