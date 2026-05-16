@@ -12,6 +12,7 @@ import { habits } from "../db/schema";
 import { eq, and, isNotNull, gte, inArray, ne, isNull } from "drizzle-orm";
 import { format, getDate, subWeeks } from "date-fns";
 import { queueMilestoneNotification } from "../lib/notifications";
+import { resetPassword } from "better-auth/api";
 
 const router = Router();
 
@@ -136,61 +137,86 @@ function getFreezesForRate(rate: number): number {
   return FREEZE_TIERS.find((t) => rate >= t.threshold)!.freezes;
 }
 
-export async function freezeResetEngine() {
-  const allUsers = await db.select().from(user);
-  const allHabits = await db.select().from(habits);
+export async function freezeResetEngine(userId?: string) {
+  if (!userId) return;
 
-  const userHabitMap = new Map<string, string[]>();
-  for (const habit of allHabits) {
-    const list = userHabitMap.get(habit.userId) ?? [];
-    list.push(habit.id);
-    userHabitMap.set(habit.userId, list);
-  }
+  const [currentUser] = await db.select().from(user).where(eq(user.id, userId));
 
-  const today = new Date();
-  const weekAgo = new Date(today);
+  if (!currentUser) return;
 
-  weekAgo.setDate(today.getDate() - 7);
-  const weekAgoStr = weekAgo.toISOString().split("T")[0]!;
+  const now = new Date();
+  const todayKey = getDateKey(now);
 
-  for (const [userId, habitIds] of userHabitMap) {
-    const logs = await db
-      .select()
-      .from(habitLogs)
-      .where(
-        and(
-          inArray(habitLogs.habitId, habitIds),
-          gte(habitLogs.date, weekAgoStr),
-        ),
-      );
+  const lastReset = currentUser.freezeResetDate
+    ? new Date(currentUser.freezeResetDate)
+    : null;
 
-    const relevantLogs = logs.filter((log) => log.status !== "skipped").length;
-    const completedLogs = logs.filter((l) => l.status === "completed").length;
+  const lastResetKey = lastReset ? getDateKey(lastReset) : null;
 
-    const completionRate =
-      relevantLogs > 0 ? Math.round((completedLogs / relevantLogs) * 100) : 0;
+  const dayOfWeek = now.getUTCDay();
 
-    const newFreezes = getFreezesForRate(completionRate);
+  const daysSinceReset = lastReset
+    ? Math.floor(((now.getTime() - lastReset.getTime()) / 1000) * 60 * 60 * 24)
+    : 8;
 
-    // weekly freeze reset
+  const shouldReset = dayOfWeek === 1 || daysSinceReset >= 7;
+  if (!shouldReset) return;
+  if (lastResetKey === todayKey) return;
 
+  // Gather all habit Ids belonging to this user
+  const habitIds = (
     await db
-      .update(user)
-      .set({
-        freezes: newFreezes,
-        freezesUsed: 0,
-        freezeResetDate: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(user.id, userId));
-  }
+      .select({ id: habits.id })
+      .from(habits)
+      .where(eq(habits.userId, userId))
+  ).map((h) => h.id);
+
+  if (!habitIds.length) return;
+
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 7);
+  const weekAgoStr = weekAgo.toISOString().split("T")[0];
+
+  const logs = await db
+    .select()
+    .from(habitLogs)
+    .where(
+      and(
+        inArray(habitLogs.habitId, habitIds),
+        gte(habitLogs.date, weekAgoStr!),
+      ),
+    );
+  if (!logs.length) return;
+
+  const relevantLogs = logs.filter((log) => log.status !== "skipped").length;
+  const successfulLogs = logs.filter(
+    (log) => log.status === "completed",
+  ).length;
+
+  const completionRate =
+    relevantLogs > 0 ? Math.round((successfulLogs / relevantLogs) * 100) : 0;
+
+  await db
+    .update(user)
+    .set({
+      freezes: getFreezesForRate(completionRate),
+      freezesUsed: 0,
+      freezeResetDate: now,
+      updatedAt: new Date(),
+    })
+    .where(eq(user.id, userId));
 }
 
-export async function streakEngine() {
-  const allHabits = await db
+export async function streakEngine(userId?: string) {
+  const query = db
     .select()
     .from(habits)
-    .where(isNull(habits.deletedAt));
+    .where(
+      userId
+        ? and(isNull(habits.deletedAt), eq(habits.userId, userId))
+        : isNull(habits.deletedAt),
+    );
+  const allHabits = await query;
   const today = getDateKey();
 
   for (const habit of allHabits) {
@@ -201,7 +227,7 @@ export async function streakEngine() {
     const createdDateKey = getDateKey(habit.createdAt);
     const lastProcessedDate =
       habit.lastProcessedDate ?? shiftDateKey(createdDateKey, -1);
-    const daysToProcess = diffDays(today, lastProcessedDate);
+    const daysToProcess = diffDays(today, lastProcessedDate) - 1;
 
     if (daysToProcess <= 0) {
       continue;
@@ -282,6 +308,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const session = (req as any).session;
+      await freezeResetEngine(session.user.id);
       const today = getDateKey();
 
       const rawHabits = await db
@@ -455,12 +482,6 @@ router.patch(
         return;
       }
 
-      if (habit.lastProcessedDate === today) {
-        return res.status(400).json({
-          error: "This habit has already been processed for today",
-        });
-      }
-
       if (todayLog?.status === "skipped") {
         return res.status(400).json({
           error: "Unfreeze this habit before checking in today",
@@ -487,6 +508,7 @@ router.patch(
         .where(and(eq(habits.id, id), eq(habits.userId, session.user.id)))
         .returning();
 
+      await streakEngine(session.user.id);
       await checkAndWriteMilestone(id, session.user.id, nextCurrentStreak);
 
       if (!todayLog) {
@@ -506,7 +528,7 @@ router.patch(
 
       return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
-      console.log("Checking error: ", err);
+      console.log("[PATCH api/habits/:id/checkin route]: ", err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   },

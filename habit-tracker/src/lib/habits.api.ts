@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -182,6 +183,7 @@ export function useCreateHabit() {
     mutationFn: habitsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
+      toast.success("Habit added successfully");
     },
   });
 }
@@ -207,10 +209,13 @@ export function useCheckIn() {
       );
       return { previous };
     },
-    onError: (_err, _id, context) => {
+    onSuccess: () => toast.success("Habit checked in successfully"),
+    onError: (_err: string, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(habitKeys.lists(), context.previous);
       }
+      toast.error(_err);
+      return;
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
@@ -229,7 +234,13 @@ export function useUpdateHabit() {
       id: string;
       payload: UpdateHabitPayload;
     }) => habitsApi.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: habitKeys.all });
+      toast.success("Habit updated successfully");
+    },
+    onError: (_err: string) => {
+      toast.error(_err);
+    },
   });
 }
 
@@ -255,10 +266,12 @@ export function useDeleteHabit() {
 
       return { previous };
     },
-    onError: (_err, _id, context) => {
+    onSuccess: () => toast.success("Habit deleted successfully"),
+    onError: (_err: string, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(habitKeys.lists(), context.previous);
       }
+      toast.error(_err);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
@@ -286,11 +299,13 @@ export function useRestore() {
       );
       return { previous };
     },
+    onSuccess: () => toast.success("Habit restored"),
 
-    onError: (_err, _id, context) => {
+    onError: (_err: string, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(habitKeys.lists(), context?.previous);
       }
+      toast.error(_err);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
@@ -337,13 +352,14 @@ export function useFreezeHabit() {
       return { previousHabits, previousUser };
     },
 
-    onError(_err, _id, context) {
+    onError(_err: string, _id, context) {
       if (context?.previousHabits !== undefined) {
         queryClient.setQueryData(habitKeys.lists(), context.previousHabits);
       }
       if (context?.previousUser !== undefined) {
         queryClient.setQueryData(habitKeys.user(), context.previousUser);
       }
+      toast.error(_err);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: habitKeys.all });
