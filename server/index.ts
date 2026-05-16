@@ -53,30 +53,6 @@ app.get("/api/health", (_req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-cron.schedule("0 23 * * *", async () => {
-  try {
-    await streakEngine();
-  } catch (error) {
-    console.error("[cron] streakEngine failed", error);
-  }
-});
-
-cron.schedule("0 0 * * 0", async () => {
-  try {
-    await freezeResetEngine();
-  } catch (error) {
-    console.error("[cron] freezeResetEngine failed", error);
-  }
-});
-
-cron.schedule("0,30 * * * *", async () => {
-  try {
-    await runNotificationDigestEngine();
-  } catch (error) {
-    console.error("[cron] runNotificationDigestEngine failed", error);
-  }
-});
-
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
