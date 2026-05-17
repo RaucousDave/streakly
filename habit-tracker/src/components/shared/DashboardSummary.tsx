@@ -1,7 +1,5 @@
 import { formatToday, getGreeting } from "@/components/shared/dashboardShared";
 import { useHabitContext } from "@/hooks/HabitContext";
-import { useState, useEffect } from "react";
-import { toast } from "sonner";
 
 export function DashboardSummary() {
   const {
@@ -12,16 +10,6 @@ export function DashboardSummary() {
     topStreak,
     totalFreezes,
   } = useHabitContext();
-
-  const [isAllDone, setIsAllDone] = useState(false);
-  if (completedCount === totalCount) {
-    setIsAllDone(true);
-  }
-  useEffect(() => {
-    if (isAllDone) {
-      toast.success("All done for today! 🎉");
-    }
-  }, [isAllDone]);
 
   const firstName = userName?.split(" ")[0] ?? "there";
   const progress =

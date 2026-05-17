@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch run index.ts"
+    "dev": "bun --watch run index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -13,13 +15,15 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
-    "drizzle-kit": "^0.31.10"
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.22.0"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.5",
+    "@neondatabase/serverless": "^1.1.0",
     "better-auth": "^1.6.5",
     "cors": "^2.8.6",
     "date-fns": "^4.1.0",
