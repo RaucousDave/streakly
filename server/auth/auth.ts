@@ -36,7 +36,7 @@ export const auth = betterAuth({
   trustedOrigins: [process.env.CLIENT_URL ?? "http://localhost:5173"],
 
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === "development",
+    // useSecureCookies: process.env.NODE_ENV === "development",
     generateId: () => crypto.randomUUID(),
     crossSubDomainCookies: {
       enabled: false,
