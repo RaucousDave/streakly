@@ -3,8 +3,7 @@ import { Flame } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { HABITS_DEMO } from "@/components/shared/habitsDemo";
-import { DemoCard } from "@/components/shared/demoCard";
-
+import { DemoCard, type Habit } from "@/components/shared/demoCard";
 export default function Hero() {
   return (
     <section className="pt-32 pb-20 px-6">
@@ -53,9 +52,7 @@ export default function Hero() {
               variant="outline"
               className="rounded-full px-8 h-12 text-base font-medium border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:border-zinc-400"
             >
-              <a href="#how">
-              See how it works ↓
-              </a>
+              <a href="#how">See how it works ↓</a>
             </Button>
           </div>
 
@@ -73,7 +70,7 @@ export default function Hero() {
             Today's habits — tap a checkbox
           </p>
           {HABITS_DEMO.map((h, i) => (
-            <DemoCard key={h.id} habit={h} delay={300 + i * 100} />
+            <DemoCard key={h.id} habit={h as Habit} delay={300 + i * 100} />
           ))}
         </div>
       </div>
