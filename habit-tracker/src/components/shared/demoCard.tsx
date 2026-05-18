@@ -5,7 +5,20 @@ import { Flame, Check } from "lucide-react";
 
 // ── Animated demo card ─────────────────────────────────────────────────────
 
-export function DemoCard({ habit, delay = 0 }) {
+export interface Habit {
+  color: keyof typeof COLOR_MAP;
+  name: string;
+  minimum: string;
+  done: boolean;
+  streak: number;
+}
+export function DemoCard({
+  habit,
+  delay = 0,
+}: {
+  habit: Habit;
+  delay: number;
+}) {
   const [checked, setChecked] = useState(habit.done);
   const [streak, setStreak] = useState(habit.streak);
   const [burst, setBurst] = useState(false);
