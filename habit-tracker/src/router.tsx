@@ -35,7 +35,7 @@ const protectedRoute = createRoute({
     if (!session)
       throw redirect({
         to: "/sign-up",
-        search: { redirect: location.pathname } as any,
+        search: { redirect: location.pathname as string },
       });
     return { session };
   },

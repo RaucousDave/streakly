@@ -249,28 +249,8 @@ export function useDeleteHabit() {
 
   return useMutation({
     mutationFn: habitsApi.delete,
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: habitKeys.all });
-      const previous = queryClient.getQueryData<Habit[]>(habitKeys.lists());
-
-      queryClient.setQueryData<Habit[]>(habitKeys.lists(), (old) =>
-        old?.map((h) =>
-          h.id === id
-            ? {
-                ...h,
-                deletedAt: new Date().toISOString(),
-              }
-            : h,
-        ),
-      );
-
-      return { previous };
-    },
     onSuccess: () => toast.success("Habit deleted successfully"),
-    onError: (_err: string, _id, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(habitKeys.lists(), context.previous);
-      }
+    onError: (_err: string) => {
       toast.error(_err);
     },
     onSettled: () => {

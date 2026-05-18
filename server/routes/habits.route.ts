@@ -727,16 +727,12 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Habit does not exist" });
     }
 
-    const [updated] = await db
-      .update(habits)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(habits.userId, session.user.id), eq(habits.id, id)))
-      .returning();
-
-    return res
-      .status(200)
-      .json({ message: "Habit deleted successfully", habit: updated });
+    await db
+      .delete(habits)
+      .where(and(eq(habits.userId, session.user.id), eq(habits.id, id)));
+    return res.status(200).json({ message: "Habit deleted successfully" });
   } catch (err) {
+    console.log("[DELETE api/habits/:id] error: ", err);
     return res.status(400).json({ error: err });
   }
 });

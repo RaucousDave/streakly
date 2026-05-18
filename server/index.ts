@@ -14,14 +14,13 @@ import habitRouter, {
 } from "./routes/habits.route";
 import notificationsRouter from "./routes/notifications.route";
 import userRouter from "./routes/user.route";
-import cron from "node-cron";
-import { runNotificationDigestEngine } from "./lib/notifications";
+
 const app = express();
 
 // Client <-> Server Connection
 app.use(
   cors({
-    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   }),
@@ -53,8 +52,11 @@ app.get("/api/health", (_req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+const server: any = app.listen(3000, "0.0.0.0", () => {
+  console.log(
+    "Unfortunately, server is running on port",
+    server.address()!.port,
+  );
 });
 
 export default app;

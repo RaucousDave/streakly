@@ -62,11 +62,6 @@ export function HabitCard({ habit }: HabitCardProps) {
     onFreeze(habit.id, !habit.frozen);
   };
 
-  const handleRestore = () => {
-    if (restoreHabit.isPending) return;
-    setConfirmDelete(false);
-    restoreHabit.mutate(habit.id);
-  };
 
   const handleEditStart = () => {
     setConfirmDelete(false);
@@ -219,7 +214,7 @@ export function HabitCard({ habit }: HabitCardProps) {
 
             {isDeleted ? (
               <Button
-                onClick={handleRestore}
+                // onClick={handleRestore}
                 disabled={restoreHabit.isPending}
                 variant="ghost"
                 size="sm"
@@ -290,7 +285,7 @@ export function HabitCard({ habit }: HabitCardProps) {
               This habit was removed from your active list. Restore it if that was accidental.
             </p>
             <Button
-              onClick={handleRestore}
+              // onClick={handleRestore}
               disabled={restoreHabit.isPending}
               variant="ghost"
               size="sm"
