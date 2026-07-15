@@ -8,7 +8,7 @@ import { authClient } from "./lib/auth.client";
 import App from "./App";
 import Dashboard from "./pages/Dashboard";
 import SignUp from "./pages/auth/SignUp";
-
+import ErrorComponent from "./components/shared/ErrorComponent.tsx";
 const rootRoute = createRootRoute();
 
 const indexRoute = createRoute({
@@ -24,6 +24,9 @@ const signUpRoute = createRoute({
   beforeLoad: async () => {
     const { data: session } = await authClient.getSession();
     if (session) throw redirect({ to: "/dashboard" });
+  },
+  errorComponent: ({ error }: { error: object }) => {
+    return <ErrorComponent error={error} />;
   },
 });
 

@@ -526,7 +526,7 @@ router.patch(
           .where(eq(habitLogs.id, todayLog.id));
       }
 
-      return res.status(200).json({ habit: updatedHabit });
+    return res.status(200).json({ habit: updatedHabit });
     } catch (err) {
       console.log("[PATCH api/habits/:id/checkin route]: ", err);
       return res.status(500).json({ message: "Internal Server Error" });
