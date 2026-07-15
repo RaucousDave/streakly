@@ -52,11 +52,7 @@ app.get("/api/health", (_req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const server: any = app.listen(3000, "0.0.0.0", () => {
-  console.log(
-    "Unfortunately, server is running on port",
-    server.address()!.port,
-  );
-});
-
+app.listen(3000, () => {
+  console.log("Server running on port 3000....")
+})
 export default app;

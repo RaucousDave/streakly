@@ -17,18 +17,18 @@ const indexRoute = createRoute({
   component: App,
 });
 
-  const signUpRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/sign-up",
-    component: SignUp,
-    beforeLoad: async () => {
-      const { data: session } = await authClient.getSession();
-      if (session) throw redirect({ to: "/dashboard" });
-    },
-    errorComponent: ({ error }: { error: Error }) => {
-      return <ErrorComponent error={error } />
-    },
-  });
+const signUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sign-up",
+  component: SignUp,
+  beforeLoad: async () => {
+    const { data: session } = await authClient.getSession();
+    if (session) throw redirect({ to: "/dashboard" });
+  },
+  errorComponent: ({ error }: { error: Error }) => {
+    return <ErrorComponent error={error} />;
+  },
+});
 
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
