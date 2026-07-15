@@ -18,13 +18,13 @@ import userRouter from "./routes/user.route";
 const app = express();
 
 // Client <-> Server Connection
-// app.use(
-//   cors({
-//     origin: process.env.CORS_ORIGIN,
-//     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-//     credentials: true,
-//   }),
-// );
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  }),
+);
 
 // 1. better-auth before express.json()
 app.use("/api/auth", globalAuthLimiter);
