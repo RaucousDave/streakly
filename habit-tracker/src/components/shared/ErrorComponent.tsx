@@ -1,8 +1,8 @@
 import { Button } from "@base-ui/react";
-import type { Error } from "@/router";
 import { Link } from "@tanstack/react-router";
 
-export default function ErrorComponent({ error }: { error: Error }) {
+export default function ErrorComponent
+  ({ error }: { error: Error }) {
   return (
     <div className="bg-neutral-900 gap-4 flex flex-col justify-center items-center text-white h-screen">
       <label className="text-white text-center text-3xl font-semibold">
